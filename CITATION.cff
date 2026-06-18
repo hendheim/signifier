@@ -1,0 +1,10 @@
+cff-version: 0.1
+message: "Bitte diese Software wie folgt zitieren:"
+authors:
+  - family-names: "Heimböckel"
+    given-names: "Hendrick"
+title: "signifier"
+version: "0.1"
+doi: 
+date-released: "2026-06-18"
+url: 

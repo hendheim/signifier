@@ -1,0 +1,89 @@
+# =============================================================================
+# Installation:   pip install -r requirements.txt
+
+# -----------------------------------------------------------------------------
+# - Python 3.11.13 (idealerweise 3.11.13) für reproduzierbare Word2Vec-Modelle
+#   (gensim/numpy-Kompatibilität)
+# - NLTK lädt bei Bedarf Zusatzdaten nach (z. B. punkt) – einmalig per
+#   python -c "import nltk; nltk.download('punkt')".
+# - Damit die Dashboard-Seite "Korpus verarbeiten" funktioniert, muss das
+#   Dashboard im selben Environment laufen, in dem diese Pakete installiert
+#   sind (am einfachsten: zusammen mit `pip install .` des fadelive-Pakets).
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Oberfläche (Dashboard)
+# -----------------------------------------------------------------------------
+streamlit>=1.32          # Web-Dashboard (app.py, alle Seiten)
+PyYAML>=6.0              # Metadatenschema laden/speichern (schema.py, Seite "Schema")
+
+# -----------------------------------------------------------------------------
+# Daten & Numerik (Pipeline + Dashboard)
+# -----------------------------------------------------------------------------
+pandas
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3        # TF-IDF, Clustering, Kosinus (s03/s04/s05, Termset, Texte)
+
+# -----------------------------------------------------------------------------
+# Sprachverarbeitung / NLP (Korpus-Pipeline)
+# -----------------------------------------------------------------------------
+spacy>=3.8               # POS-Tagging (s01_4) und Auto-POS auf der Tagging-Seite
+nltk>=3.8                # Tokenisierung/Statistik (s01_3, s07)
+gensim>=4.3              # Word2Vec-Modelle (s07; Seiten "Wort-Vektoren"/"Termset-Vektoren")
+
+# Nach der Installation von spacy:  python -m spacy download de_core_news_lg
+
+# -----------------------------------------------------------------------------
+# Visualisierung
+# -----------------------------------------------------------------------------
+matplotlib>=3.7          # nahezu alle Plots
+plotly>=5.18             # interaktive Streudiagramme (Seite "Texte")
+seaborn>=0.12            # statistische Plots (Pipeline-Statistik/Notebooks)
+wordcloud>=1.9           # Wortwolke (Termset-Vektoren)
+umap-learn>=0.5          # Dimensionsreduktion (Termset-Vektoren, Texte)
+adjustText>=0.8          # überlappungsfreie Label in Plots (Visualisierungen)
+
+# -----------------------------------------------------------------------------
+# Netzwerk-Visualisierung
+# -----------------------------------------------------------------------------
+networkx>=3.0            # semantisches Netzwerk (Wort-Vektoren)
+pyvis>=0.3               # interaktive Netzwerke 
+
+# -----------------------------------------------------------------------------
+# Hilfsmittel
+# -----------------------------------------------------------------------------
+tqdm>=4.65               # Fortschrittsbalken (Pipeline-Läufe)
+
+# -----------------------------------------------------------------------------
+# OPTIONAL – nur für interaktive Notebooks (Jupyter); fürs Dashboard/die
+# Pipeline nicht nötig. Bei Bedarf einkommentieren.
+# -----------------------------------------------------------------------------
+# ipykernel>=6.0
+# ipywidgets>=8.0
+
+# -----------------------------------------------------------------------------
+# Korpus-Erstellung aus XML (Seite "Korpus Datenbank erstellen")
+# -----------------------------------------------------------------------------
+lxml>=4.9               # robustes XML-Parsing/volles XPath (Datenbank erstellen)
+beautifulsoup4>=4.12    # tolerantes Parsen unsauberer XML/HTML-Quellen (optional)
+
+# -----------------------------------------------------------------------------
+# Topic-Modellierung & Modellmetriken
+# (Seiten "Topic-Modell erstellen" und "Wort-Vektoren" -> Tab Metriken)
+# -----------------------------------------------------------------------------
+# Es werden ausschliesslich bereits oben gelistete Pakete genutzt:
+#   scikit-learn  -> NMF/LDA-Topics (explorer_core/topic_model.py)
+#   scipy         -> Spearman-Korrelation + orthogonale Procrustes-Ausrichtung
+#                    (explorer_core/wvm_metrics.py)
+#   gensim        -> Topic-Kohaerenz C_v / c_npmi (explorer_core/topic_metrics.py)
+#                    sowie Word2Vec (s07)
+# => Keine zusaetzlichen Python-Pakete erforderlich.
+#
+# MALLET (optional; Seite "MALLET einrichten" + Methode "MALLET"):
+#   Externes JAVA-Programm, KEIN pip-Paket. Voraussetzungen:
+#     - Java-Laufzeit (z. B. Ubuntu/Debian: sudo apt install default-jre)
+#     - MALLET-Binary (mallet-2.0.8) - ueber die Einrichtungsseite herunter-
+#       ladbar/entpackbar oder als ZIP-Upload (offline).
+#   Der Wrapper explorer_core/mallet_runner.py ruft MALLET per Subprozess auf.
+# =============================================================================
