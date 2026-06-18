@@ -18,8 +18,8 @@ Die Pipeline und das Dashboard können mit Anpassungen für alle deutschsprachig
 
 Anhand der Listen `resources/ocr_post-correction_dictionary.txt`, `resources/replacements.json` und `resources/stopwords.txt` und den Einstellungen in der `config/signifier_v1` können die Ersetzungen sowie Tilgungen an das zugrundeliegende Projekt angepasst werden.
 
-_signifier_ ging aus dem Projekt [*FaDeLive*](https://doi.org/10.5281/zenodo.1797902](https://doi.org/10.5281/zenodo.17979024) hervor, in dem
-analoge Quellen fotomechanisch gescannt, mit OCR verarbeitet und in Hinblick auf OCR-Fehler gesäubert wurden. Diese Verarbeitungsstufe TXT (content)* ist die Grundlage für die weitere Prozessierung der Daten. Siehe zur Vorverarbeitung und Verarbeitung des Korpus die Diagramme: <https://doi.org/10.48693/730>
+_signifier_ ging aus dem Projekt [*FaDeLive*](https://doi.org/10.5281/zenodo.1797902) hervor, in dem
+analoge Quellen fotomechanisch gescannt, mit OCR verarbeitet und in Hinblick auf OCR-Fehler gesäubert wurden. Diese Verarbeitungsstufe TXT (content)* ist die Grundlage für die weitere Prozessierung der Daten. Siehe zur Vorverarbeitung und Verarbeitung des Korpus die Diagramme: <https://doi.org/10.48693/730>.
 
 Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasiertes Streamlit-Dashboard** übertragen. 
 Änderungen und Erweiterungen sind:
@@ -47,14 +47,14 @@ Die Installation setzt eine Umgebung mit **Python 3.11** voraus (idealerweise
 
 ```bash
 pip install -r requirements.txt
-# Deutsches spaCy-Modell (falls nicht über requirements gezogen):
+```
+
+Die Verarbeitung erfordert ein spaCy-Modell für Deutsch:
+```bash
 python -m spacy download de_core_news_lg
 ```
 
-Hinweise:
-
-- **MALLET** ist optional (Java-Programm, kein pip-Paket) und kann über die
-  Seite *MALLET einrichten* halb-automatisch installiert werden.
+Die Installation der `MALLET`-Software für das Topic-Modelling ist optional im Tool möglich. Topic-Modelling ist alternativ mit `scikitlearn` möglich, das über `requirements.txt` installiert wird. 
 
 **Start des Dashboards:**
 
@@ -93,14 +93,14 @@ sodass bestehende Korpora ohne Änderung funktionieren.
 > Ein Beispieldokument (Marie von Ebner-Eschenbach: *Krambambuli*,
 > 1883) wird auf der Startseite des Dashboards als Tabelle gezeigt.
 
-> Ein exemplarisches und umfangreiches Korpus wäre etwa der Bildungsromankorpus (Boucher, Herrmann, Hummel, Wiebe 2024), bestehend aus 126 Volltexten: [https://doi.org/10.5281/zenodo.14289199](https://doi.org/10.5281/zenodo.14289199).
+> Ein exemplarisches und umfangreiches Korpus ist etwa das Bildungsromankorpus (Boucher, Herrmann, Hummel, Wiebe 2024), bestehend aus 126 Volltexten: [https://doi.org/10.5281/zenodo.14289199](https://doi.org/10.5281/zenodo.14289199).
 
 
 <br>
 
 ## 4. Datenbank erstellen
 
-In dem Dashboard kann eine `korpus.csv`/`metadaten.csv` aufgebaut werden (Seite *Korpus Datenbank erstellen*):
+In dem Dashboard kann eine `korpus.csv`/`metadaten.csv` aufgebaut werden:
 
 - **aus `.txt`-Dateien** – die Textdateien werden über eine ID-Spalte
   (Dateiname = ID) mit einer Metadaten-CSV zusammengeführt; ohne Metadaten-CSV
@@ -146,6 +146,9 @@ Die Pipeline erzeugt aus `korpus/korpus.csv` schrittweise alle Ausgaben unter
 7. **`s04_cosine`** – Kosinus-Matrizen
 8. **`s05_dtm_tfidf_cos_intervals`** – Intervall-Matrizen
 9. **`s06_tfidf_rank`** – TF-IDF-Ranglisten von Vokabular und Texten
+
+Das Wort-Vektor-Modell setzt die Einstellung weiterer Parameter voraus und steht auf einer separaten Seite.
+
 10. **`s07_word_vector_model`** – Word2Vec-Modelle
 
 Die Pipeline ist über **TOML-Dateien** konfigurierbar
@@ -167,7 +170,7 @@ lassen sich per Argument überschreiben.
 
 ### 5.2 `explorer_core/` – UI-freie Logik
 
-| Modul | Aufgabe |
+| Modul | Funktion |
 | --- | --- |
 | `data_store.py` | Laden/Cachen aller Datenquellen und Modelle (`DataStore`, `ModelStore`) |
 | `schema.py` | konfigurierbares Metadatenschema mit Auto-Detection-Fallback |
@@ -193,26 +196,42 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
 
 **Verarbeitung & Einrichtung**
 
-**0 · Korpus Datenbank erstellen** – Datenbank aus `txt-`/`xml`-Dateien bauen
-**1 · Korpus verarbeiten** – NLP-Pipeline (`s01`–`s06`) starten
-**2 · Semantisches Taggen** – POS-Frequenzliste um die Tags `tag1, tag2, tag3` ergänzen
-**3 · Semantische Tags verarbeiten** – getaggte POS-Liste verarbeiten (`tt01`)
-**4 · Wort-Vektor-Modelle erstellen** – ein Wort-Vektor-Modell wird erstellt (`s07`)
-**5 · MALLET einrichten** – Java prüfen, die Topic-Modellierungs-Software MALLET herunterladen/entpacken
-**6 · Topic-Modell erstellen** – Topics mit scikit-learn (NMF/LDA) bzw. MALLET, optional mit Chunking
-**7 · Topics nachverarbeiten** – Topic-Ranking (`tt02`)
-**8 · Document-Term-Topic-Index** –Termset-Topic-Text-Verhältnisse berechnen und nachverarbeiten (`tt03`–`tt04`)
-**9 · Verarbeitetes Korpus laden** – Projektordner setzen und Datenpfade prüfen
-**10 · Metadatenschema** – Rollen der Metadatenspalten festlegen (`config/metadata_schema.yaml`)
+- **0 · Korpus Datenbank erstellen** – Datenbank aus `txt-`/`xml`-Dateien bauen
+  
+-  **1 · Korpus verarbeiten** – NLP-Pipeline (`s01`–`s06`) starten
+  
+- **2 · Semantisches Taggen** – POS-Frequenzliste um die Tags `tag1, tag2, tag3` ergänzen
+  
+- **3 · Semantische Tags verarbeiten** – getaggte POS-Liste verarbeiten (`tt01`)
+  
+- **4 · Wort-Vektor-Modelle erstellen** – ein Wort-Vektor-Modell wird erstellt (`s07`)
+  
+- **5 · MALLET einrichten** – Java prüfen, die Topic-Modellierungs-Software MALLET herunterladen/entpacken
+  
+- **6 · Topic-Modell erstellen** – Topics mit scikit-learn (NMF/LDA) bzw. MALLET, optional mit Chunking
+  
+- **7 · Topics nachverarbeiten** – Topic-Ranking (`tt02`)
+  
+- **8 · Document-Term-Topic-Index** –Termset-Topic-Text-Verhältnisse berechnen und nachverarbeiten (`tt03`–`tt04`)
+  
+- **9 · Verarbeitetes Korpus laden** – Projektordner setzen und Datenpfade prüfen
+  
+- **10 · Metadatenschema** – Rollen der Metadatenspalten festlegen (`config/metadata_schema.yaml`)
+
 
 **Exploration**
 
-**11 · Ausdrücke** – Frequenz, TF-IDF-Rang, Dokument-Frequenz, Konkordanz (KWIC), Kollokationen (FREQ/PMI), Wortverläufe
-**12 · Texte** – Streudiagramme (PCA, MDS, t-SNE, UMAP) und Dendrogramme der Text-Ähnlichkeit
-**13 · Wort-Vektoren** – Embeddings, Embedding-Vergleich, semantisches Netzwerk, Modell-Metriken
-**14 · Termset-Vektoren** – UMAP-Cluster, Wortwolke und Dendrogramme eines Termsets
-**15 · Topics** – diachrone Topicverläufe ausgewählter Topics
-**16 · Tag-Topics** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
+- **11 · Ausdrücke** – Frequenz, TF-IDF-Rang, Dokument-Frequenz, Konkordanz (KWIC), Kollokationen (FREQ/PMI), Wortverläufe
+  
+- **12 · Texte** – Streudiagramme (PCA, MDS, t-SNE, UMAP) und Dendrogramme der Text-Ähnlichkeit
+  
+- **13 · Wort-Vektoren** – Embeddings, Embedding-Vergleich, semantisches Netzwerk, Modell-Metriken
+  
+- **14 · Termset-Vektoren** – UMAP-Cluster, Wortwolke und Dendrogramme eines Termsets
+  
+- **15 · Topics** – diachrone Topicverläufe ausgewählter Topics
+  
+- **16 · Tag-Topics** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
 
 <br>
 
@@ -334,4 +353,4 @@ signifier
 
 ## 8. Verwendete KI
 _signifier_ wurde mit Fable 5 und Opus 4.8 von Anthropic geschrieben. 
-Das Staunen ist unaussprechlich. 
+Unsagbares Staunen. 
