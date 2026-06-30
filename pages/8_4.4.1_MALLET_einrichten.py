@@ -43,17 +43,17 @@ else:
             "- **Linux (Debian/Ubuntu):** `sudo apt install default-jre`\n"
             "- **macOS (Homebrew):** `brew install openjdk`\n"
             "- **Windows:** Adoptium Temurin JRE/JDK installieren "
-            "(https://adoptium.net) und Java zum PATH hinzufuegen.\n\n"
+            "(https://www.java.com/en/download/) und Java zum PATH hinzufuegen.\n\n"
             "Danach diese Seite neu laden.")
 
 st.divider()
 
 # --- MALLET-Quelle ---
-st.subheader("MALLET-Binary beschaffen")
-mode = st.radio("Quelle", ["Herunterladen (Netz noetig)",
+st.subheader("MALLET installieren")
+mode = st.radio("Quelle", ["Herunterladen (Internetzugang benötigt)",
                            "Lokale ZIP hochladen (offline)"], horizontal=True)
 
-target_dir = Path(st.text_input("Zielordner", value=str(default_target)))
+target_dir = Path(st.text_input("Zielordner muss festgelegt bleiben", value=str(default_target)))
 source = None
 uploaded_zip_path = None
 
@@ -104,6 +104,6 @@ col2.metric("MALLET", "OK" if stt["mallet_path"] else "fehlt")
 if stt["mallet_path"]:
     st.caption(f"Starter: `{stt['mallet_path']}`")
 if stt["ready"]:
-    st.success("Bereit fuer das Topic-Modelling mit MALLET.")
+    st.success("Bereit für das Topic-Modelling mit MALLET.")
 else:
-    st.info("Noch nicht vollstaendig: Java und/oder MALLET-Binary fehlen.")
+    st.info("Noch nicht vollständig: Java und/oder MALLET-Binary fehlen.")

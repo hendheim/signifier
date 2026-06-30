@@ -19,7 +19,7 @@ Ersetzt den alten Tag-Topic-Explorer (gui_tag_topic_explorer.py):
 import streamlit as st
 
 from ui_helpers import (get_store, get_schema, show_error, df_with_download,
-                        fig_with_download, parse_year_range)
+                        parse_year_range)
 from explorer_core.analysis_topics import (tag_topic_bubbles,
                                            stacked_topics_per_year,
                                            tt_texts_polynomial,
@@ -28,8 +28,8 @@ from explorer_core.analysis_topics import (tag_topic_bubbles,
 
 from explorer_core.viz_export import save_figure
 
-st.set_page_config(page_title="Tag-Topics", layout="wide")
-st.title("🔖 Tag-Topics")
+st.set_page_config(page_title="DTTI erkunden", layout="wide")
+st.title("🔖 Document-Tag-Topic-Relationen")
 st.caption("Beziehungen zwischen Termset-Tags und Topic-Modell")
 
 store = get_store()

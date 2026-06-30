@@ -77,7 +77,7 @@ tab_build, tab_metrics = st.tabs(["Topic-Modell erstellen", "Metriken (Qualität
 
 with tab_build:
     method_label = st.radio(
-        "Verfahren", ["NMF (auf TF-IDF)", "LDA (auf Zaehlungen)", "MALLET (Java, LDA)"],
+        "Verfahren", ["NMF (auf TF-IDF)", "LDA (auf Frequenzen)", "MALLET (Java, LDA)"],
         horizontal=True,
         help="Drei Wege zum selben Ziel: aus den Texten thematische Wortgruppen "
              "('Topics') gewinnen. NMF rechnet auf TF-IDF und liefert scharfe, gut "
@@ -106,7 +106,7 @@ with tab_build:
             "Eingabe", ["Korpus-Text + Chunking (empfohlen)",
                         "Vorhandene DTM/TF-IDF-Matrix"], horizontal=True,
             help="Chunking zerlegt lange Texte (z. B. ganze Romane) in kleinere "
-                 "Segmente. Das ist meist die bessere Wahl: ein ganzer Roman mischt "
+                 "Segmente. Das ist meist die bessere Wahl: ein umfangreicher Text mischt "
                  "zu viele Themen, viele kürzere Segmente ergeben klarere und "
                  "stabilere Topics. 'Vorhandene Matrix' überspringt diesen Schritt "
                  "und nutzt eine bereits berechnete DTM/TF-IDF.")
@@ -266,17 +266,17 @@ with tab_build:
             names = [str(p.relative_to(project_root)) for p in cands] + ["(anderer Pfad...)"]
             sel = st.selectbox("Korpus-CSV (mit Textspalte)", names, key="tm_corpus_sel")
             corpus_path = (Path(st.text_input("Pfad zur Korpus-CSV",
-                                              value="korpus/korpus.csv", key="tm_corpus_path"))
+                                              value="output/processed_corpus/korpus_stop.csv", key="tm_corpus_path"))
                            if sel == "(anderer Pfad...)" else project_root / sel)
         else:
             corpus_path = Path(st.text_input("Pfad zur Korpus-CSV",
-                                             value="korpus/korpus.csv", key="tm_corpus_path"))
+                                             value="output/processed_corpus/korpus_stop.csv", key="tm_corpus_path"))
         if not corpus_path.is_absolute():
             corpus_path = project_root / corpus_path
 
         a1, a2, a3 = st.columns(3)
-        content_col = a1.text_input("Textspalte", value="content", key="tm_cc")
-        id_col = a2.text_input("ID-Spalte", value="_id", key="tm_idc")
+        content_col = a1.text_input("Textspalte", value="content_stop", key="tm_cc")
+        id_col = a2.text_input("ID-Spalte", value="id", key="tm_idc")
         chunk_words = a3.number_input("Wörter pro Segment", 100, 5000, 1000, 50,
                                       key="tm_cw",
                                       help="Länge der Textsegmente in Wörtern. "
@@ -290,6 +290,13 @@ with tab_build:
                                          "dieser Wert sind, werden verworfen - sie "
                                          "enthalten zu wenig Information für ein "
                                          "verlässliches Topic-Profil.")
+        if method == "mallet":
+            lowercase = st.checkbox(
+                "lowercase", value=False, key="tm_mallet_lc",
+                help="Aus (Standard): MALLET erhält die Groß-/Kleinschreibung "
+                     "(--preserve-case). An: alle Tokens werden beim Import klein "
+                     "geschrieben – kann im Deutschen großgeschriebene Substantive/"
+                     "Eigennamen mit gleichlautenden Verben verschmelzen.")
         if method != "mallet":
             with st.expander("Vektorisierung (Vokabular)"):
                 v1, v2 = st.columns(2)
@@ -320,10 +327,10 @@ with tab_build:
                                              "Deutschen Substantive und Verben "
                                              "verschmelzen.")
         aggregate = st.checkbox("Zusätzlich pro Ursprungstext mitteln "
-                                "(Segment-Topics -> Roman-Profil)", value=True,
+                                "(Segment-Topics -> Text-Profil)", value=True,
                                 key="tm_agg",
                                 help="An: zusätzlich zur Topic-Verteilung je Segment "
-                                     "wird je Originaltext (Roman) eine gemittelte "
+                                     "wird je Originaltext eine gemittelte "
                                      "Verteilung berechnet - ein Topic-Profil pro Werk. "
                                      "Die Segment-Ebene bleibt dabei erhalten.")
     else:
@@ -360,11 +367,13 @@ with tab_build:
                     content_col=content_col.strip(), id_col=id_col.strip(),
                     chunk_words=int(chunk_words), min_words=int(min_words),
                     top_words=int(top_words), random_seed=int(random_state),
+                    preserve_case=not lowercase,
                     aggregate=aggregate, **mallet_params)
                 st.session_state["tm_agg_result"] = agg
                 model_params = {k: info[k] for k in
                                 ("engine", "num_iterations", "optimize_interval",
-                                 "alpha", "beta", "random_seed") if k in info}
+                                 "alpha", "beta", "random_seed", "preserve_case")
+                                if k in info}
                 st.session_state["tm_meta"] = {
                     "modus": "korpus+chunking+mallet", "methode": "mallet",
                     "korpus": corpus_path.name, "korpus_path": str(corpus_path),

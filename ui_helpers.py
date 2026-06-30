@@ -124,11 +124,16 @@ def parse_terms(raw: str) -> list[str]:
 
 
 def parse_year_range(raw: str) -> tuple[int, int] | None:
-    """'1780-1900' → (1780, 1900); leere/ungültige Eingabe → None."""
-    raw = (raw or "").strip()
+    """'1780-1900' → (1780, 1900); leere/ungültige Eingabe → None.
+
+    Akzeptiert auch Float-/Komma-Schreibweisen wie '1780.0-1900.0' oder
+    '1780,0-1900,0' sowie den Halbgeviertstrich '–', damit die Eingabe nicht
+    still durchfällt, wenn Jahre als 1786.0 angezeigt werden.
+    """
+    raw = (raw or "").strip().replace("–", "-")
     if "-" in raw:
         try:
-            lo, hi = (int(p.strip()) for p in raw.split("-", 1))
+            lo, hi = (int(float(p.strip().replace(",", "."))) for p in raw.split("-", 1))
             if lo <= hi:
                 return lo, hi
         except ValueError:

@@ -22,7 +22,6 @@ Beispielaufruf:
 
 import argparse
 import json
-import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -55,18 +54,12 @@ def _ensure_nltk_punkt():
 try:
     from .pipeline_utils import (
         detect_delimiter,
-        identify_content_column,
-        identify_metadata_columns,
-        identify_id_column,
-        identify_year_columns
+        identify_content_column
     )
 except ImportError:
     from pipeline_utils import (
         detect_delimiter,
-        identify_content_column,
-        identify_metadata_columns,
-        identify_id_column,
-        identify_year_columns
+        identify_content_column
     )
 
 try:
@@ -174,12 +167,18 @@ def tokenize_corpus(texts: pd.Series) -> List[List[str]]:
     return sentences
 
 
-def estimate_token_count(texts: pd.Series) -> int:
+def estimate_token_count(texts) -> int:
     """Schätzt die Token-Anzahl im Korpus (Stichprobe, schnell)."""
-    sample_size = min(100, len(texts))
-    sample = texts.sample(n=sample_size, random_state=42) if len(texts) > sample_size else texts
-    avg_tokens = sample.astype(str).apply(lambda x: len(x.split())).mean()
-    return int(avg_tokens * len(texts))
+    if isinstance(texts, pd.DataFrame):        # doppelte content-Spalten → erste
+        texts = texts.iloc[:, 0]
+    texts = texts.fillna("").astype(str)       # NaN/Zahlen sicher zu Strings
+    n = len(texts)
+    if n == 0:
+        return 0
+    sample_size = min(100, n)
+    sample = texts.sample(n=sample_size, random_state=42) if n > sample_size else texts
+    avg_tokens = sample.map(lambda x: len(str(x).split())).mean()
+    return int(avg_tokens * n)
 
 
 def count_tokens_in_file(file_path: Path, delimiter: str = "auto") -> Tuple[int, int]:
@@ -202,8 +201,11 @@ def count_tokens_in_file(file_path: Path, delimiter: str = "auto") -> Tuple[int,
     content_col = identify_content_column(df)
     if content_col is None:
         return 0, 0
-    texts = df[content_col].astype(str)
-    tokens = int(texts.apply(lambda x: len(x.split())).sum())
+    col = df[content_col]
+    if isinstance(col, pd.DataFrame):          # doppelte content-Spalten → erste
+        col = col.iloc[:, 0]
+    texts = col.fillna("").astype(str)
+    tokens = int(texts.map(lambda x: len(str(x).split())).sum())
     return tokens, len(df)
 
 

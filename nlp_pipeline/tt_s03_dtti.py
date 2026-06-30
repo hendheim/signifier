@@ -9,11 +9,11 @@ CLI-Beispielaufruf:
     python nlp_pipeline/tt_s03_dtti.py `
         --termset-file resources/termsets/Termset_Gegenstände_1.2.csv `
         --topic-word-file resources/topic-models/topics_v3/fadelive_mallet_stop_topic_words_100_words_tag.csv `
-        --topic-rank-file output/processed_topics/document-topics-distribution_tag_rank.csv `
+        --topic-rank-file output/processed_topics/topics_v3/document-topics-distribution_tag_rank.csv `
         --tfidf-file output/dtm_tfidf_stop/tfidf-2000.csv `
         --doc-topic-file resources/topic-models/topics_v3/document-topics-distribution_tag.csv `
         --dtm-file output/dtm_tfidf_stop/dtm_minfreq6.csv `
-        --output-dir output/processed_termset/Termset_Gegenstände_1.2 `
+        --output-dir output/processed_termset/Termset_Gegenstände_1.2/topics_v3 `
         --tfidf-start-col-index 24 `
         --dtm-start-col-index 24 `
         --dtm-id-col _id
@@ -24,7 +24,7 @@ from __future__ import annotations
 import argparse
 from math import log
 from pathlib import Path
-from typing import Dict, Set, List, Tuple, Union, Optional
+from typing import Dict, Set, List, Tuple, Union
 
 import numpy as np
 import pandas as pd

@@ -107,7 +107,7 @@ def _fit_on_matrix(X, vocab: List[str], ids: List[str], n_topics: int,
     row_sums = W.sum(axis=1, keepdims=True)
     row_sums[row_sums == 0] = 1.0
     doc_topic = pd.DataFrame(
-        W / row_sums, index=pd.Index(ids, name="_id"),
+        W / row_sums, index=pd.Index(ids, name="id"),
         columns=[str(i) for i in range(k)])
 
     top = min(int(top_words), len(vocab))
@@ -120,7 +120,7 @@ def _fit_on_matrix(X, vocab: List[str], ids: List[str], n_topics: int,
 
 def fit_topics(matrix_df: pd.DataFrame, n_topics: int = 20,
                method: str = "nmf", top_words: int = 100,
-               id_col: Optional[str] = "_id",
+               id_col: Optional[str] = "id",
                feature_start: Optional[int] = 10,
                random_state: int = 42, max_iter: Optional[int] = None,
                extra_params: Optional[dict] = None
@@ -157,7 +157,7 @@ def vectorize_texts(texts: List[str], method: str = "nmf",
 
 def fit_topics_from_corpus(corpus_df: pd.DataFrame, n_topics: int = 20,
                            method: str = "nmf", *, content_col: str = "content",
-                           id_col: str = "_id", chunk_words: int = 1000,
+                           id_col: str = "id", chunk_words: int = 1000,
                            min_words: int = 50, top_words: int = 100,
                            max_features: Optional[int] = 2000, min_df: int = 2,
                            max_df: float = 0.95, lowercase: bool = False,

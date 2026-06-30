@@ -20,16 +20,16 @@ diese Datei baut nur die Oberfläche.
 import streamlit as st
 
 from ui_helpers import (get_store, get_schema, show_error, df_with_download,
-                        fig_with_download, metadata_multiselect, parse_terms,
+                        metadata_multiselect, parse_terms,
                         parse_year_range)
 from explorer_core.analysis_terms import (
-    term_frequencies, filter_tfidf_rank, term_overview, document_frequencies, concordance,
+    term_overview, document_frequencies, concordance,
     collocations, collocation_documents, word_trends, plot_trends,
 )
 
 from explorer_core.viz_export import save_figure
 
-st.set_page_config(page_title="Ausdrücke", layout="wide")
+st.set_page_config(page_title="Ausdrücke erkunden", layout="wide")
 st.title("🔤 Ausdrücke")
 st.caption("Frequenzen, TF-IDF, Konkordanzen, Kollokationen und Wortverläufe")
 
@@ -183,7 +183,7 @@ with tab_kollok:
             st.markdown("##### Belegdokumente zu einer Kollokation")
             params = st.session_state["kol_params"]
             pair_options = [
-                f"{row['Ziel']} ↔ {row['Kollokat']}"
+                f"{row['target']} ↔ {row['collocate']}"
                 for _, row in df_kol.iterrows()
             ]
             chosen = st.selectbox("Kollokationspaar wählen", pair_options,

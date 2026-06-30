@@ -95,7 +95,7 @@ def parse_args() -> argparse.Namespace:
         "--metadata-file",
         type=Path,
         default=None,
-        help="Optional: CSV-Datei mit Dokument-Metadaten (muss Spalte '_id' enthalten).",
+        help="Optional: CSV-Datei mit Dokument-Metadaten (muss Spalte 'id' enthalten).",
     )
     parser.add_argument(
         "--meta-sep",
@@ -229,22 +229,45 @@ def compute_top_docs_per_topic(
 # Metadaten-Mapping
 # ---------------------------------------------------------------------------
 
+# Flexible ID-Spalten-Erkennung – gespiegelt aus explorer_core.schema
+# (DEFAULT_ID_CANDIDATES), damit das Skript ohne Projekt-Import als CLI/Test
+# lauffähig bleibt. Reihenfolge = Priorität.
+_ID_CANDIDATES = ["_id", "id", "doc_id", "document_id",
+                  "filename", "file_id", "index"]
+
+
+def _find_id_column(df: pd.DataFrame) -> Optional[str]:
+    """Findet die ID-Spalte case-insensitiv/whitespace-tolerant (wie das Schema)."""
+    normalized = {str(c).lower().strip(): c for c in df.columns}
+    for cand in _ID_CANDIDATES:
+        if cand in df.columns:
+            return cand
+        hit = normalized.get(cand.lower().strip())
+        if hit is not None:
+            return hit
+    return None
+
+
 def load_metadata(metadata_file: Path, sep: str = "auto") -> pd.DataFrame:
     """
-    Lädt eine Metadaten-CSV mit mindestens der Spalte '_id' und setzt diese
-    als Index (als String).
+    Lädt eine Metadaten-CSV und setzt die (flexibel erkannte) ID-Spalte als
+    String-Index. Die ID-Spalte wird wie im restlichen Projekt erkannt
+    (``_id``/``id``/``doc_id``/…), nicht mehr hart auf 'id' verlangt.
     """
     if sep in (None, "auto"):
         # Trenner automatisch erkennen (pandas/csv.Sniffer).
         df_meta = pd.read_csv(metadata_file, sep=None, engine="python")
     else:
         df_meta = pd.read_csv(metadata_file, sep=sep)
-    if "_id" not in df_meta.columns:
+    id_col = _find_id_column(df_meta)
+    if id_col is None:
         raise ValueError(
-            f"Metadaten-Datei {metadata_file} muss eine Spalte '_id' enthalten."
+            f"Metadaten-Datei {metadata_file} braucht eine ID-Spalte "
+            f"(eine von: {', '.join(_ID_CANDIDATES)})."
         )
-    df_meta["_id"] = df_meta["_id"].astype(str)
-    df_meta = df_meta.set_index("_id")
+    df_meta[id_col] = df_meta[id_col].astype(str)
+    df_meta = df_meta.set_index(id_col)
+    df_meta.index.name = "id"
     return df_meta
 
 

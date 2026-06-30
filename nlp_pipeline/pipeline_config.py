@@ -13,7 +13,7 @@ FEATURES:
 Pipeline-Schritte:
     1. s01_preprocessing: Vorverarbeitung → korpus_min/lem/stop.csv
     2. s01_vocabulary: Vokabular-Erzeugung (mit dynamischen Intervallen)
-    3. s01_statistics: Statistik-Erzeugung
+    (Schritt 3 – Statistik – entfernt: jetzt Dashboard-Seite "Statistik")
     4. s01_pos_tag: POS-Tagging der Top-5000 Ausdrücke
     5. s02_gensim_preprocessing: Gensim-Preprocessing → korpus_gen.csv
     6. s03_dtm_tfidf: DTM- und TF-IDF-Matrizen
@@ -32,7 +32,6 @@ from typing import Optional
 try:
     from .s01_preprocessing import run as step1
     from .s01_vocabulary import run as step2
-    from .s01_statistics import run as step3
     from .s01_pos_tag import run as step4
     from .s02_gensim_preprocessing import run as step5
     from .s03_dtm_tfidf import run as step6
@@ -44,7 +43,6 @@ try:
 except ImportError:
     from s01_preprocessing import run as step1
     from s01_vocabulary import run as step2
-    from s01_statistics import run as step3
     from s01_pos_tag import run as step4
     from s02_gensim_preprocessing import run as step5
     from s03_dtm_tfidf import run as step6
@@ -186,30 +184,8 @@ def run_pipeline_with_cfg(cfg: dict) -> None:
         )
         print("✅ Vokabular ausgelesen!\n")
 
-    # =========================================================================
-    # STEP 3: STATISTIK
-    # =========================================================================
-    if "3" in steps_to_run:
-        print("\n" + "=" * 80)
-        print("STEP 3: STATISTIK")
-        print("=" * 80)
-        c = cfg["step3_s01_3_statistics"]
-        
-        preprocessed_dir = Path(c["preprocessed_dir"])
-        delimiter_cfg = c.get("delimiter", "auto")
-        
-        if detected_delimiter and delimiter_cfg == "auto":
-            delimiter = detected_delimiter
-        else:
-            ref_file = preprocessed_dir / "korpus_min.csv"
-            delimiter = normalize_delimiter(delimiter_cfg, ref_file)
-        
-        step3(
-            preprocessed_dir=preprocessed_dir,
-            output_dir=Path(c["output_dir"]),
-            delimiter=delimiter,
-        )
-        print("✅ Statistik ausgelesen!\n")
+    # STEP 3 (Statistik) wurde entfernt – Statistiken laufen jetzt über die
+    # Dashboard-Seite "Statistik" (explorer_core.analysis_stats).
 
     # =========================================================================
     # STEP 4: POS-TAGGING

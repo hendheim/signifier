@@ -155,8 +155,11 @@ def _count_corpus_tokens(input_dir: Path, pattern: str,
     if content_col is None:
         return diag
 
-    texts = df[content_col].astype(str)
-    diag["tokens"] = int(texts.apply(lambda x: len(x.split())).sum())
+    col = df[content_col]
+    if isinstance(col, pd.DataFrame):          # doppelte content-Spaltennamen → erste
+        col = col.iloc[:, 0]
+    texts = col.fillna("").astype(str)         # NaN/Zahlen sicher zu Strings
+    diag["tokens"] = int(texts.map(lambda x: len(str(x).split())).sum())
     return diag
 
 st.set_page_config(page_title="Korpus verarbeiten", layout="wide")
@@ -217,7 +220,7 @@ else:
     # Reihenfolge 1→10 erzwingen, egal wie ausgewählt
     steps = [s for s in all_steps if s in chosen]
 
-with st.expander("Was bedeuten die Schritte?"):
+with st.expander("Was wird in den Schritten erzeugt?"):
     for s in all_steps:
         st.markdown(f"- **{s}** — {STEP_LABELS[s]}")
 
@@ -304,8 +307,131 @@ if start:
                             expanded=True):
                 st.code("\n".join(outputs), language="text")
 
+# ---------------------------------------------------------------------------
+# 4) Eigennamen tilgen (Variante "-n") – Erkennen → Prüfen → Tilgen
+# ---------------------------------------------------------------------------
 st.divider()
+st.subheader("4 · Eigennamen tilgen (Variante `-n`)")
 st.caption(
-    "💡 Ohne Dashboard startbar: Doppelklick auf `start_pipeline.bat` "
-    "(Windows) bzw. `./start_pipeline.sh` (macOS/Linux)."
+    "Kandidaten sind die als Eigenname (`PROPN`) getaggten Ausdrücke – entweder "
+    "aus der vorhandenen POS-Liste (Top-5000 aus Schritt 4) geladen oder mit "
+    "einer neu erstellten POS-Liste (wählbare Anzahl Top-Ausdrücke). Häkchen für "
+    "die Ausdrücke setzen, die in der `-n`-Verarbeitung getilgt werden sollen. Es "
+    "wird ab `corpus_stop` gearbeitet (keine Neu-Lemmatisierung). Ergebnis sind "
+    "`output/processed_corpus/korpus_stop_ner.csv` und die `…-n`-Ordner. "
+    "Einige gängige Ausdrücke wie „Frau“ oder „Mann“ sind durch eine Schutzliste "
+    "von der Tilgung ausgenommen."
 )
+
+processed_dir = project_root / "output" / "processed_corpus"
+stop_csv = processed_dir / "korpus_stop.csv"
+cand_csv = processed_dir / "name_candidates.csv"
+terms_csv = processed_dir / "name_exclude.csv"
+
+if not stop_csv.exists():
+    st.info("Voraussetzung: `output/processed_corpus/korpus_stop.csv` "
+            "(und `korpus_gen.csv` für die Wortvektoren). Bitte zuerst die "
+            "Pipeline oben laufen lassen.")
+
+
+def _run_n(label: str, **kwargs) -> int | None:
+    """Startet einen Runner-Lauf mit Live-Log; gibt den Returncode zurück."""
+    log_lines: list[str] = []
+    log_box = st.empty()
+    rc = None
+    try:
+        with st.status(label, expanded=True) as status:
+            for kind, payload in stream_pipeline(
+                    runner_path=runner_path, project_root=project_root,
+                    config_path=config_path, **kwargs):
+                if kind == "log":
+                    log_lines.append(str(payload))
+                    log_box.code("\n".join(log_lines[-400:]), language="text")
+                elif kind == "done":
+                    rc = payload
+            status.update(label=(f"{label} – fertig ✅" if rc == 0
+                                 else f"{label} – Fehler (Code {rc})"),
+                          state="complete" if rc == 0 else "error")
+    except Exception as exc:
+        show_error(exc)
+    return rc
+
+# Schritt 1: Kandidaten erzeugen – aus den als PROPN getaggten Ausdrücken.
+# Zwei Wege: vorhandene POS-Liste laden (sofort) oder neue POS-Liste erstellen.
+OPT_LOAD = "Kandidaten für Namen aus den Top-5000 Ausdrücken laden"
+OPT_MAKE = "Neue POS-Liste erstellen und Kandidaten auswählen"
+mode = st.radio("Kandidaten erzeugen", [OPT_LOAD, OPT_MAKE],
+                index=0, key="cand_mode")
+
+if mode == OPT_LOAD:
+    # Vorhandene POS-Liste (Schritt 4) als Quelle; Standarddatei voreinstellen.
+    default_pos = project_root / "output" / "vocabular" / "vocab_top5000_stop_pos.csv"
+    pos_files = sorted((project_root / "output").glob("vocabular*/*_pos.csv"))
+    opts = [str(p.relative_to(project_root)) for p in pos_files]
+    default_rel = str(default_pos.relative_to(project_root))
+    if default_rel not in opts and default_pos.exists():
+        opts.insert(0, default_rel)
+    if not opts:
+        st.info("Keine POS-Liste gefunden. Bitte zuerst die Pipeline bis "
+                "Schritt 4 (POS-Tagging) laufen lassen oder „Neue POS-Liste "
+                "erstellen“ wählen.")
+    else:
+        sel_pos = st.selectbox("POS-Liste", opts,
+                               index=opts.index(default_rel) if default_rel in opts else 0,
+                               help="Alle als PROPN getaggten Ausdrücke werden geladen.")
+        if st.button("🔎 Kandidaten laden", disabled=not (project_root / sel_pos).exists()):
+            from nlp_pipeline.s08_name_removal import propn_candidates_from_pos
+            try:
+                cand = propn_candidates_from_pos(project_root / sel_pos)
+                cand.to_csv(cand_csv, index=False, encoding="utf-8")
+                st.success(f"{len(cand)} PROPN-Kandidaten aus `{sel_pos}` geladen.")
+            except Exception as exc:
+                show_error(exc)
+else:
+    # Neue POS-Liste mit wählbarer Anzahl Top-Ausdrücke (gleiche Grundlage wie
+    # das reguläre POS-Tagging: vocab_full_stop.json) – taggt nur diese Wörter.
+    n_pos = st.number_input("POS-Tagging für wie viele Top-Ausdrücke?",
+                            min_value=100, max_value=50000, value=5000, step=500,
+                            help="Grundlage ist dieselbe wie für das POS-Tagging "
+                                 "(vocab_full_stop.json).")
+    if st.button("🧠 Neue POS-Liste erstellen & Kandidaten erzeugen",
+                 disabled=not stop_csv.exists()):
+        _run_n(f"POS-Liste (Top-{int(n_pos)}) wird erstellt …",
+               detect_names=True, make_pos=True, top_terms=int(n_pos))
+
+# Schritt 2: Kandidaten prüfen (Häufigkeit + Checkbox, alle anfangs abgewählt)
+if cand_csv.exists():
+    import pandas as pd
+    cand = pd.read_csv(cand_csv)
+    st.markdown(f"**{len(cand)} Eigennamen-Kandidaten (PROPN)** – anhaken, was "
+                "getilgt werden soll:")
+    alle = st.checkbox("Alle auswählen / abwählen", value=False,
+                       key="name_cand_all")
+    cand.insert(0, "tilgen", alle)
+    edited = st.data_editor(
+        cand, use_container_width=True, height=420, hide_index=True,
+        column_config={
+            "tilgen": st.column_config.CheckboxColumn("tilgen", default=False),
+            "term": st.column_config.TextColumn("Ausdruck", disabled=True),
+            "frequency": st.column_config.NumberColumn("Frequenz", disabled=True),
+        },
+        key=f"name_cand_editor_{alle}",
+    )
+    selected = [str(t) for t, keep in zip(edited["term"], edited["tilgen"]) if keep]
+    st.caption(f"{len(selected)} von {len(edited)} Ausdrücken ausgewählt.")
+
+    # Schritt 3: Ausgewählte tilgen
+    if st.button("🧹 Ausgewählte Ausdrücke tilgen", type="primary",
+                 disabled=not selected):
+        pd.DataFrame({"term": selected}).to_csv(terms_csv, index=False,
+                                                encoding="utf-8")
+        rc = _run_n("Ausgewählte Ausdrücke werden getilgt …",
+                    remove_names=True, terms_file=terms_csv)
+        if rc == 0:
+            st.success("Fertig. Bereinigte Ergebnisse in `output/…-n/` und "
+                       "`output/processed_corpus/korpus_stop_ner.csv`.")
+        elif rc is not None:
+            st.error("Die Tilgung ist nicht sauber durchgelaufen – Log prüfen.")
+else:
+    st.caption("Noch keine Kandidatenliste – zuerst oben Kandidaten laden bzw. "
+               "eine POS-Liste erstellen.")

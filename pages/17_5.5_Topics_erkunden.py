@@ -22,7 +22,7 @@ Polynom-Trend dargestellt werden.
 import streamlit as st
 
 from ui_helpers import (get_store, get_schema, show_error, df_with_download,
-                        fig_with_download, parse_year_range)
+                        parse_year_range)
 from explorer_core.analysis_topics import (topics_with_years,
                                            topic_year_means,
                                            topic_threshold_counts,
@@ -30,7 +30,7 @@ from explorer_core.analysis_topics import (topics_with_years,
 from explorer_core.analysis_terms import plot_trends
 from explorer_core.viz_export import save_figure
 
-st.set_page_config(page_title="Topics", layout="wide")
+st.set_page_config(page_title="Topics erkunden", layout="wide")
 st.title("📈 Topics")
 st.caption("Topic-Verläufe über die Zeit")
 

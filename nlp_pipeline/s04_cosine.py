@@ -25,7 +25,6 @@ Beispielaufruf:
 import argparse
 import re
 import pandas as pd
-import numpy as np
 from pathlib import Path
 from typing import Optional, List, Tuple
 from sklearn.metrics.pairwise import cosine_similarity
@@ -34,14 +33,12 @@ from sklearn.metrics.pairwise import cosine_similarity
 try:
     from .pipeline_utils import (
         identify_content_column,
-        identify_id_column,
-        has_column
+        identify_id_column
     )
 except ImportError:
     from pipeline_utils import (
         identify_content_column,
-        identify_id_column,
-        has_column
+        identify_id_column
     )
 
 

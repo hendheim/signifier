@@ -176,11 +176,13 @@ _CLUSTER_SIZES = {
 }
 
 
-def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
-                    n_neighbors: int = 15, min_dist: float = 0.1,
-                    resolution: str = "Klein", show_labels: bool = True
-                    ) -> Tuple[plt.Figure, pd.DataFrame, Dict[int, List[str]]]:
-    """UMAP-Streudiagramm mit agglomerativem Clustering eines Termsets.
+def compute_termset_clusters(kv, df_terms: pd.DataFrame, k: int = 5,
+                             n_neighbors: int = 15, min_dist: float = 0.1):
+    """Teurer Teil des Termset-Clusterings: Vektoren, agglomeratives Clustering
+    und 2D-Projektion. Gibt **picklebare** Daten zurück
+    (``terms, labels, coords, proj_method``), damit das Ergebnis – vor allem das
+    beim ersten Aufruf einmalig Numba-kompilierte UMAP – über ``st.cache_data``
+    gecacht werden kann.
 
     Robust gemacht:
     - Das agglomerative Clustering läuft auf Kosinus-Distanzen; die
@@ -188,8 +190,7 @@ def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
       wird abgefangen.
     - Für die 2D-Projektion wird UMAP versucht; schlägt der Import oder der
       Lauf fehl (häufige umap/numba/numpy-Kompatibilitätsklemme), wird
-      deterministisch auf PCA zurückgefallen, statt abzubrechen. Die
-      tatsächlich verwendete Methode steht im Diagrammtitel.
+      deterministisch auf PCA zurückgefallen, statt abzubrechen.
     """
     from sklearn.cluster import AgglomerativeClustering
 
@@ -213,7 +214,6 @@ def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
 
     # --- 2D-Projektion: UMAP, sonst PCA-Fallback ----------------------------
     proj_method = "UMAP"
-    coords = None
     try:
         import umap
         nn = min(max(2, n_neighbors), len(terms) - 1)
@@ -226,24 +226,37 @@ def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
         coords = PCA(n_components=2, random_state=42).fit_transform(vectors)
         proj_method = "PCA (UMAP nicht verfügbar)"
 
-    # --- Zeichnen ------------------------------------------------------------
+    return terms, labels, np.asarray(coords), proj_method
+
+
+def draw_termset_clusters(terms, labels, coords, proj_method,
+                          resolution: str = "Klein", show_labels: bool = True
+                          ) -> Tuple[plt.Figure, pd.DataFrame, Dict[int, List[str]]]:
+    """Billiger Teil: zeichnet das Streudiagramm aus den (ggf. gecachten)
+    Cluster-/Projektionsdaten und baut die Zuordnungstabelle. Enthält weder
+    UMAP noch Clustering, ändert sich also ohne Neuberechnung (z. B. bei
+    geänderter Bildgröße oder Labels-Schalter)."""
+    labels = np.asarray(labels)
+    coords = np.asarray(coords)
+    n_clusters = int(labels.max()) + 1 if len(labels) else 0
+
     figsize, marker_size, font_size = _CLUSTER_SIZES.get(resolution, _CLUSTER_SIZES["Klein"])
     fig, ax = plt.subplots(figsize=figsize)
     # Farbpalette, die auch für k > 10 verschiedene Farben liefert.
-    if k <= 10:
+    if n_clusters <= 10:
         palette = plt.cm.tab10(np.linspace(0, 1, 10))
-    elif k <= 20:
+    elif n_clusters <= 20:
         palette = plt.cm.tab20(np.linspace(0, 1, 20))
     else:
-        palette = plt.cm.hsv(np.linspace(0, 1, k, endpoint=False))
-    for i in range(k):
+        palette = plt.cm.hsv(np.linspace(0, 1, n_clusters, endpoint=False))
+    for i in range(n_clusters):
         mask = labels == i
         ax.scatter(coords[mask, 0], coords[mask, 1], c=[palette[i % len(palette)]],
                    label=f"Cluster {i + 1}", s=marker_size, alpha=0.7)
     if show_labels:
         for i, t in enumerate(terms):
             ax.annotate(t, (coords[i, 0], coords[i, 1]), fontsize=font_size, alpha=0.8)
-    ax.set_title(f"Termset-Clustering (k={k}, n={len(terms)}, Projektion: {proj_method})")
+    ax.set_title(f"Termset-Clustering (k={n_clusters}, n={len(terms)}, Projektion: {proj_method})")
     ax.legend(loc="upper right", fontsize=8)
     ax.axis("off")
     fig.tight_layout()
@@ -255,6 +268,19 @@ def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
     df_result = pd.DataFrame({"term": terms, "cluster": labels + 1,
                               "x": coords[:, 0], "y": coords[:, 1]})
     return fig, df_result, dict(clusters)
+
+
+def cluster_termset(kv, df_terms: pd.DataFrame, k: int = 5,
+                    n_neighbors: int = 15, min_dist: float = 0.1,
+                    resolution: str = "Klein", show_labels: bool = True
+                    ) -> Tuple[plt.Figure, pd.DataFrame, Dict[int, List[str]]]:
+    """UMAP-Streudiagramm mit agglomerativem Clustering eines Termsets.
+    Rückwärtskompatible Komposition aus ``compute_termset_clusters`` (teuer,
+    cachebar) und ``draw_termset_clusters`` (billig)."""
+    terms, labels, coords, proj_method = compute_termset_clusters(
+        kv, df_terms, k=k, n_neighbors=n_neighbors, min_dist=min_dist)
+    return draw_termset_clusters(terms, labels, coords, proj_method,
+                                 resolution=resolution, show_labels=show_labels)
 
 
 # ----------------------------------------------------------------------------

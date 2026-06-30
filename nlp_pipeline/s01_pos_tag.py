@@ -32,12 +32,11 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import pandas as pd
 import spacy
 from spacy.language import Language
-from spacy.tokens import Token
 
 
 # ---------------------------------------------------------

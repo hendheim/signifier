@@ -88,6 +88,34 @@ def main(argv=None) -> int:
                         help='Optional: JSON-Objekt mit Word2Vec-Hyperparametern '
                              '(z. B. \'{"vector_size":150,"window":5,"epochs":20}\'). '
                              'Überschreibt für Schritt 10 die größenabhängigen Defaults.')
+    parser.add_argument("--remove-names", action="store_true",
+                        help="Namensbereinigte Variante '-n' erzeugen: tilgt "
+                             "Eigennamen (Figuren/Autoren) aus den vorhandenen "
+                             "Stufen korpus_min/lem/stop/gen und rechnet die "
+                             "Folgeschritte in '-n'-Ordner. Startet ab corpus_stop "
+                             "(keine Neu-Lemmatisierung). Mit --terms-file werden "
+                             "genau die dort gelisteten Ausdrücke getilgt, sonst "
+                             "automatisch erkannt.")
+    parser.add_argument("--terms-file",
+                        help="Optional: CSV mit Spalte 'term' – die zu tilgenden "
+                             "Ausdrücke (kuratierte Auswahl). Nur mit --remove-names.")
+    parser.add_argument("--detect-names", action="store_true",
+                        help="Nur Eigennamen erkennen und als CSV "
+                             "(output/processed_corpus/name_candidates.csv, Spalten "
+                             "term,frequency) speichern – ohne zu tilgen.")
+    parser.add_argument("--make-pos", action="store_true",
+                        help="Optional (mit --detect-names): zuerst eine neue "
+                             "POS-Liste erzeugen (gleiche Grundlage wie Schritt 4: "
+                             "vocab_full_stop.json) und daraus die PROPN-Kandidaten "
+                             "ableiten. Ohne Angabe wird die vorhandene POS-Liste "
+                             "genutzt bzw. – ganz ohne --pos-file – das Korpus getaggt.")
+    parser.add_argument("--pos-file",
+                        help="Optional (mit --detect-names): vorhandene POS-Liste "
+                             "(CSV mit Spalten word,pos,count), aus der die PROPN "
+                             "als Kandidaten geladen werden.")
+    parser.add_argument("--top-terms", type=int, default=None,
+                        help="Optional (mit --make-pos): für wie viele Top-Ausdrücke "
+                             "die POS-Liste erzeugt wird.")
     args = parser.parse_args(argv)
 
     # Windows-Konsole (cp1252) kann Emoji-Ausgaben der Skripte nicht codieren
@@ -146,6 +174,77 @@ def main(argv=None) -> int:
         if isinstance(w2v, dict) and w2v:
             print(f"[run_pipeline] Word2Vec-Hyperparameter: {w2v}", flush=True)
             cfg.setdefault("step10_s07_word_vector_model", {})["hyperparams"] = w2v
+
+    # Für die Eigennamen-Erkennung bewusst das große Modell (bessere POS/NER);
+    # load_tagger fällt auf ein vorhandenes Modell zurück.
+    NER_MODEL = "de_core_news_lg"
+    _step1 = cfg.get("step1_s01_1_preprocessing", {})
+    _processed_dir = Path(_step1.get("output_dir", "output/processed_corpus"))
+    _metadata_path = Path("korpus") / "metadaten.csv"
+
+    if args.detect_names:
+        # Nur erkennen: Kandidatenliste (term, frequency) schreiben – ohne Tilgung.
+        try:
+            from nlp_pipeline.name_removal import (
+                detect_name_candidates, propn_candidates_from_pos)
+        except ImportError:
+            from name_removal import (
+                detect_name_candidates, propn_candidates_from_pos)
+        print("=" * 80, flush=True)
+        print("EIGENNAMEN ERKENNEN (Kandidatenliste)", flush=True)
+        print("=" * 80, flush=True)
+        if args.make_pos:
+            # Neue POS-Liste erzeugen (gleiche Grundlage wie Schritt 4), dann PROPN.
+            step4 = cfg.get("step4_s01_4_pos_tag", {})
+            input_json = step4.get("input_json", "output/vocabular/vocab_full_stop.json")
+            model = step4.get("model", "de_core_news_md")
+            limit = int(args.top_terms or step4.get("limit", 5000))
+            pos_out = Path("output/vocabular") / f"vocab_top{limit}_stop_pos.csv"
+            print(f"[detect-names] Erzeuge POS-Liste (Top-{limit}) aus "
+                  f"{input_json} mit {model} ...", flush=True)
+            try:
+                from nlp_pipeline.s01_pos_tag import run as pos_run
+            except ImportError:
+                from s01_pos_tag import run as pos_run
+            pos_run(input_json, str(pos_out), model=model, limit=limit)
+            cand = propn_candidates_from_pos(pos_out)
+        elif args.pos_file:
+            cand = propn_candidates_from_pos(Path(args.pos_file))
+        else:
+            cand = detect_name_candidates(_processed_dir, model=NER_MODEL,
+                                          metadata_path=_metadata_path)
+        out_csv = _processed_dir / "name_candidates.csv"
+        cand.to_csv(out_csv, index=False, encoding="utf-8")
+        print(f"[detect-names] {len(cand)} Kandidaten gespeichert: {out_csv}", flush=True)
+        return 0
+
+    if args.remove_names:
+        # Namensbereinigte Variante "-n" (ab corpus_stop, ohne Neu-Lemmatisierung).
+        # Mit --terms-file: genau die gelisteten Ausdrücke; sonst automatisch erkennen.
+        try:
+            from nlp_pipeline.name_removal import (
+                build_stop_n_corpus, strip_terms_corpus, load_terms, derive_stop_n_cfg)
+        except ImportError:
+            from name_removal import (
+                build_stop_n_corpus, strip_terms_corpus, load_terms, derive_stop_n_cfg)
+
+        out_dir = _processed_dir.parent / (_processed_dir.name + "-n")
+        print("=" * 80, flush=True)
+        print("NAMENSTILGUNG → Variante '-n'", flush=True)
+        print("=" * 80, flush=True)
+        if args.terms_file:
+            terms = load_terms(Path(args.terms_file))
+            print(f"[remove-names] kuratierte Liste: {len(terms)} Ausdrücke "
+                  f"aus {args.terms_file}", flush=True)
+            diag = strip_terms_corpus(_processed_dir, out_dir, terms)
+        else:
+            diag = build_stop_n_corpus(_processed_dir, out_dir, model=NER_MODEL,
+                                       metadata_path=_metadata_path)
+        print(f"[remove-names] {diag['n_names']} Ausdrücke getilgt; "
+              f"Stufen: {', '.join(diag['written']) or '—'}", flush=True)
+
+        run_pipeline_with_cfg(derive_stop_n_cfg(cfg))
+        return 0
 
     run_pipeline_with_cfg(cfg)
     return 0

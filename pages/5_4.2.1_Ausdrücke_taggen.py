@@ -26,7 +26,7 @@ import streamlit as st
 from ui_helpers import get_store, show_error
 from explorer_core import tagging  # Modul mit der Tagging-Logik
 
-st.set_page_config(page_title="POS-Liste taggen", layout="wide")
+st.set_page_config(page_title="Ausdrücke taggen", layout="wide")
 st.title("🏷️ POS-Liste taggen")
 st.caption("Top-5000-Ausdrücke der Stufe „stop“ in bis zu drei Kategorien "
            "(tag1/tag2/tag3) einordnen.")
@@ -43,7 +43,7 @@ default_pos = project_root / "output" / "vocabular" / "vocab_top5000_stop_pos.cs
 # ---------------------------------------------------------------------------
 st.subheader("1 · POS-Liste laden")
 
-pos_path = st.text_input("Pfad zur POS-Frequenzliste (Spalten word, pos, count)",
+pos_path = st.text_input("Pfad zur POS-Frequenzliste (Spalten `word`, `pos`, `count`)",
                         value=str(default_pos))
 
 col_load, col_info = st.columns([1, 3])
@@ -59,6 +59,9 @@ if load_clicked:
             st.error(msg)
         else:
             st.session_state["tag_df"] = df
+            # Alten Editor-Status verwerfen, sonst würde der gespeicherte
+            # Bearbeitungsstand (Deltas) auf die NEU geladene Liste angewandt.
+            st.session_state.pop("tag_editor", None)
             st.session_state["tag_path"] = pos_path
             st.success(f"{len(df):,} Zeilen geladen.")
     except Exception as exc:
@@ -74,10 +77,6 @@ df: pd.DataFrame = st.session_state["tag_df"]
 # 2) Vorhandene Tags (Wiederverwendung)
 # ---------------------------------------------------------------------------
 st.subheader("2 · Taggen")
-
-done, total = tagging.tagging_progress(df)
-st.progress(done / total if total else 0.0,
-            text=f"{done} von {total} Ausdrücken getaggt")
 
 vocab = tagging.existing_tags(df)
 if vocab:
@@ -97,6 +96,12 @@ column_config = {
     "tag3": st.column_config.TextColumn("tag3", help="Optionale dritte Kategorie."),
 }
 
+# WICHTIG: 'df' (Session-Baseline) muss über Reruns STABIL bleiben und darf NICHT
+# mit dem Editor-Ergebnis überschrieben werden. Sonst bekäme der data_editor bei
+# jedem Tastendruck neue Eingabedaten, würde sich neu aufbauen, den Zellfokus
+# verlieren (Cursor springt nicht weiter / nicht zurück) und gerade getippte
+# Werte teils verwerfen. Die Edits hält Streamlit unter key="tag_editor"; das
+# fertige Ergebnis steht in 'edited'.
 edited = st.data_editor(
     df,
     use_container_width=True,
@@ -106,8 +111,11 @@ edited = st.data_editor(
     column_config=column_config,
     key="tag_editor",
 )
-# Edits in die Session zurückschreiben
-st.session_state["tag_df"] = edited
+
+# Fortschritt aus dem aktuellen Bearbeitungsstand (nicht aus der Baseline).
+done, total = tagging.tagging_progress(edited)
+st.progress(done / total if total else 0.0,
+            text=f"{done} von {total} Ausdrücken getaggt")
 
 # ---------------------------------------------------------------------------
 # 3) POS für neu ergänzte Wörter (spaCy)
@@ -125,9 +133,13 @@ with st.expander("POS-Tags für neu ergänzte Wörter mit spaCy bestimmen"):
             try:
                 pos_map = tagging.pos_for_words(new_words)
                 edited.loc[mask, "pos"] = edited.loc[mask, "word"].map(pos_map)
+                # Programmatische Änderung: neue Baseline setzen UND den
+                # Editor-Status verwerfen, sonst übernimmt der data_editor die
+                # ergänzten POS-Tags nicht. Danach neu ausführen.
                 st.session_state["tag_df"] = edited
-                st.success(f"{len(new_words)} POS-Tags ergänzt. Tabelle oben "
-                           "aktualisiert sich nach dem nächsten Klick.")
+                st.session_state.pop("tag_editor", None)
+                st.success(f"{len(new_words)} POS-Tags ergänzt.")
+                st.rerun()
             except ModuleNotFoundError:
                 st.warning("spaCy ist nicht installiert. Bei Bedarf: "
                            "`pip install spacy` und das Modell "

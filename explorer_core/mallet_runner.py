@@ -26,8 +26,10 @@ import pandas as pd
 
 try:  # Paketkontext
     from .corpus_segment import segment_corpus, aggregate_by_source, SOURCE_COLUMN
+    from .mallet_setup import windows_safe_launcher
 except Exception:  # Skript-/Testkontext
     from corpus_segment import segment_corpus, aggregate_by_source, SOURCE_COLUMN
+    from mallet_setup import windows_safe_launcher
 
 
 class MalletNotConfigured(RuntimeError):
@@ -35,12 +37,44 @@ class MalletNotConfigured(RuntimeError):
 
 
 def read_mallet_path(project_root: Path) -> Optional[str]:
-    """Liest den gemerkten Starter-Pfad aus resources/mallet/mallet_path.txt."""
-    cfg = Path(project_root) / "resources" / "mallet" / "mallet_path.txt"
+    """Findet den MALLET-Starter – konsistent mit der Status-Anzeige der Seite
+    'MALLET einrichten'.
+
+    1. Liest den gemerkten Pfad aus ``resources/mallet/mallet_path.txt`` (sofern
+       die Datei existiert UND der dort gespeicherte Pfad noch existiert).
+    2. Fallback: sucht den Starter **live** in ``resources/mallet`` (über
+       ``locate_mallet``). Das deckt die Fälle ab, in denen MALLET manuell in den
+       Ordner gelegt wurde (ohne Klick auf 'MALLET einrichten') oder der
+       gemerkte **absolute** Pfad nach einem Ordner-Umzug/-Umbenennen veraltet
+       ist. Der gefundene Pfad wird zurückgemerkt.
+    """
+    mallet_dir = Path(project_root) / "resources" / "mallet"
+    cfg = mallet_dir / "mallet_path.txt"
     if cfg.exists():
         p = cfg.read_text(encoding="utf-8").strip()
         if p and Path(p).exists():
-            return p
+            # Auf Windows den .bat-Starter erzwingen (der gemerkte Pfad zeigt oft
+            # auf das endungslose Unix-Skript → WinError beim Start).
+            safe = str(windows_safe_launcher(Path(p)))
+            if safe != p:
+                try:
+                    cfg.write_text(safe, encoding="utf-8")
+                except Exception:
+                    pass
+            return safe
+
+    try:  # Paketkontext
+        from .mallet_setup import locate_mallet
+    except Exception:  # Skript-/Testkontext
+        from mallet_setup import locate_mallet
+    launcher = locate_mallet(mallet_dir)
+    if launcher is not None:
+        try:  # Pfad (ggf. korrigiert) zurückmerken
+            cfg.parent.mkdir(parents=True, exist_ok=True)
+            cfg.write_text(str(launcher), encoding="utf-8")
+        except Exception:
+            pass
+        return str(launcher)
     return None
 
 
@@ -131,10 +165,17 @@ def run_mallet(mallet_path: str, texts: List[str], ids: List[str],
                n_topics: int = 20, top_words: int = 100,
                num_iterations: int = 1000, random_seed: int = 42,
                optimize_interval: int = 10, alpha: float = 5.0,
-               beta: float = 0.01, workdir: Optional[Path] = None
+               beta: float = 0.01, preserve_case: bool = False,
+               workdir: Optional[Path] = None
                ) -> Tuple[pd.DataFrame, pd.DataFrame, dict]:
-    """Führt import-file + train-topics aus und parst die Ausgaben."""
-    mallet_path = str(mallet_path)
+    """Führt import-file + train-topics aus und parst die Ausgaben.
+
+    ``preserve_case=True`` erhält die Groß-/Kleinschreibung (case-sensitive).
+    Standardmäßig kleinschreibt MALLET beim Import alle Tokens.
+    """
+    # Auf Windows den .bat-Starter verwenden (endungsloses Unix-Skript ist per
+    # subprocess nicht ausführbar → WinError 2/193).
+    mallet_path = str(windows_safe_launcher(Path(mallet_path)))
     if not Path(mallet_path).exists():
         raise MalletNotConfigured(f"MALLET-Starter nicht gefunden: {mallet_path}")
 
@@ -146,29 +187,54 @@ def run_mallet(mallet_path: str, texts: List[str], ids: List[str],
     topickeys = workdir / "topic-keys.txt"
     env = _mallet_env(Path(mallet_path))
 
+    # Vollständigkeit der Installation prüfen: ohne mallet-deps.jar (und die
+    # kompilierten Klassen) scheitert MALLET sonst mit dem kryptischen
+    # "Hauptklasse … konnte nicht gefunden oder geladen werden".
+    install = Path(mallet_path).parent.parent
+    deps = install / "lib" / "mallet-deps.jar"
+    if not deps.exists():
+        raise MalletNotConfigured(
+            f"MALLET-Installation unvollständig: '{deps}' fehlt. Der Download "
+            "war vermutlich unvollständig – bitte auf der Seite 'MALLET "
+            "einrichten' neu einrichten.")
+
     _write_import_file(texts, ids, txt)
 
-    subprocess.run([mallet_path, "import-file", "--input", str(txt),
-                    "--output", str(corpus), "--keep-sequence"],
-                   check=True, capture_output=True, text=True, env=env)
+    def _step(args: List[str], what: str) -> None:
+        """Ruft MALLET auf und reicht bei Fehler die echte Meldung weiter."""
+        res = subprocess.run([mallet_path, *args],
+                             capture_output=True, text=True, env=env)
+        if res.returncode != 0:
+            msg = (res.stderr or res.stdout or "").strip()
+            raise MalletNotConfigured(
+                f"MALLET '{what}' fehlgeschlagen (Code {res.returncode}). "
+                f"Meldung:\n{msg[:2000] or '(keine Ausgabe)'}")
 
-    subprocess.run([mallet_path, "train-topics", "--input", str(corpus),
-                    "--num-topics", str(int(n_topics)),
-                    "--num-iterations", str(int(num_iterations)),
-                    "--random-seed", str(int(random_seed)),
-                    "--optimize-interval", str(int(optimize_interval)),
-                    "--alpha", str(float(alpha)), "--beta", str(float(beta)),
-                    "--num-top-words", str(int(top_words)),
-                    "--output-doc-topics", str(doctopics),
-                    "--output-topic-keys", str(topickeys)],
-                   check=True, capture_output=True, text=True, env=env)
+    import_args = ["import-file", "--input", str(txt), "--output", str(corpus),
+                   "--keep-sequence"]
+    if preserve_case:
+        # MALLET kleinschreibt Tokens beim Import standardmäßig;
+        # --preserve-case erhält die Groß-/Kleinschreibung (case-sensitive).
+        import_args.append("--preserve-case")
+    _step(import_args, "import-file")
+
+    _step(["train-topics", "--input", str(corpus),
+           "--num-topics", str(int(n_topics)),
+           "--num-iterations", str(int(num_iterations)),
+           "--random-seed", str(int(random_seed)),
+           "--optimize-interval", str(int(optimize_interval)),
+           "--alpha", str(float(alpha)), "--beta", str(float(beta)),
+           "--num-top-words", str(int(top_words)),
+           "--output-doc-topics", str(doctopics),
+           "--output-topic-keys", str(topickeys)], "train-topics")
 
     doc_topic = _parse_doc_topics(doctopics, int(n_topics))
     topic_word = _parse_topic_keys(topickeys)
     info = {"engine": "mallet", "n_topics": int(n_topics),
             "num_iterations": int(num_iterations), "random_seed": int(random_seed),
             "optimize_interval": int(optimize_interval), "alpha": float(alpha),
-            "beta": float(beta), "workdir": str(workdir)}
+            "beta": float(beta), "preserve_case": bool(preserve_case),
+            "workdir": str(workdir)}
     return doc_topic, topic_word, info
 
 
@@ -178,8 +244,12 @@ def fit_mallet_from_corpus(corpus_df: pd.DataFrame, mallet_path: str,
                            min_words: int = 50, top_words: int = 100,
                            num_iterations: int = 1000, random_seed: int = 42,
                            optimize_interval: int = 10, alpha: float = 5.0,
-                           beta: float = 0.01, aggregate: bool = True):
-    """Kompletter MALLET-Weg ab Korpus-Text mit Chunking (analog sklearn)."""
+                           beta: float = 0.01, preserve_case: bool = False,
+                           aggregate: bool = True):
+    """Kompletter MALLET-Weg ab Korpus-Text mit Chunking (analog sklearn).
+
+    ``preserve_case=True`` erhält die Groß-/Kleinschreibung (case-sensitive).
+    """
     seg = segment_corpus(corpus_df, chunk_words=chunk_words, id_col=id_col,
                          content_col=content_col, min_words=min_words)
     if seg.empty:
@@ -190,7 +260,8 @@ def fit_mallet_from_corpus(corpus_df: pd.DataFrame, mallet_path: str,
     doc_topic, topic_word, info = run_mallet(
         mallet_path, texts, ids, n_topics=n_topics, top_words=top_words,
         num_iterations=num_iterations, random_seed=random_seed,
-        optimize_interval=optimize_interval, alpha=alpha, beta=beta)
+        optimize_interval=optimize_interval, alpha=alpha, beta=beta,
+        preserve_case=preserve_case)
 
     agg = None
     if aggregate:

@@ -332,18 +332,33 @@ def word_trends(dtm: pd.DataFrame, term_cols: List[str], schema: MetadataSchema,
 
     work = dtm.copy()
     work["_year"] = years
+    # Dokumente ohne (gültige) Jahresangabe werden nicht berücksichtigt.
     work = work.dropna(subset=["_year"])
+    if work.empty:
+        raise ValueError("Keine Dokumente mit gültiger Jahresangabe gefunden.")
+    work["_year"] = work["_year"].astype(int)   # ganze Jahre (kein 1786.0 auf der Achse)
+
+    # Ziel-Jahresachse: ohne Bereich der volle Korpus-Span (kleinstes..größtes
+    # Jahr), mit Bereich genau lo..hi. So ist die x-Achse immer eine
+    # durchgehende Jahresfolge – auch Jahre ohne Treffer erscheinen (Wert 0),
+    # statt dass eine leere/degenerierte Achse entsteht.
     if year_range:
         lo, hi = year_range
         work = work[(work["_year"] >= lo) & (work["_year"] <= hi)]
+    else:
+        lo, hi = int(work["_year"].min()), int(work["_year"].max())
+    full_years = pd.Index(range(lo, hi + 1), name="year")
 
     df_abs = pd.DataFrame({t: work.groupby("_year")[t].sum() for t in valid})
-    df_abs.index.name = "year"
+    df_abs = df_abs.reindex(full_years, fill_value=0)
 
-    total_per_year = work.groupby("_year")[term_cols].sum().sum(axis=1)
-    df_rel = pd.DataFrame(index=df_abs.index)
+    total_per_year = (work.groupby("_year")[term_cols].sum().sum(axis=1)
+                      .reindex(full_years, fill_value=0))
+    df_rel = pd.DataFrame(index=full_years)
     for t in valid:
-        df_rel[t] = (df_abs[t] / total_per_year) * 1_000_000  # pro Mio. Tokens
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rel = (df_abs[t] / total_per_year) * 1_000_000  # pro Mio. Tokens
+        df_rel[t] = rel.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
     return df_abs, df_rel, missing
 
@@ -356,6 +371,11 @@ def plot_trends(df: pd.DataFrame, title: str, ylabel: str,
     Wird sowohl für Wort- als auch für Topic-Verläufe verwendet.
     """
     fig, ax = plt.subplots(figsize=(12, 6))
+    if df is None or df.empty or len(df.columns) == 0:
+        ax.text(0.5, 0.5, "Keine Daten im gewählten Bereich",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.set_title(title)
+        return fig
     for col in df.columns:
         if poly_degree:
             x = df.index.astype(float).values
@@ -375,6 +395,9 @@ def plot_trends(df: pd.DataFrame, title: str, ylabel: str,
     ax.set_title(title)
     ax.set_xlabel("Jahr")
     ax.set_ylabel(ylabel)
+    # Ganzzahlige Jahreszahlen auf der x-Achse (kein 1786.0).
+    from matplotlib.ticker import MaxNLocator
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True, nbins="auto"))
     ax.grid(True, alpha=0.4)
     ax.legend(bbox_to_anchor=(1.02, 0.5), loc="center left", fontsize=8)
     fig.tight_layout()
