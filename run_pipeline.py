@@ -185,10 +185,10 @@ def main(argv=None) -> int:
     if args.detect_names:
         # Nur erkennen: Kandidatenliste (term, frequency) schreiben – ohne Tilgung.
         try:
-            from nlp_pipeline.name_removal import (
+            from nlp_pipeline.s08_name_removal import (
                 detect_name_candidates, propn_candidates_from_pos)
         except ImportError:
-            from name_removal import (
+            from s08_name_removal import (
                 detect_name_candidates, propn_candidates_from_pos)
         print("=" * 80, flush=True)
         print("EIGENNAMEN ERKENNEN (Kandidatenliste)", flush=True)
@@ -222,10 +222,10 @@ def main(argv=None) -> int:
         # Namensbereinigte Variante "-n" (ab corpus_stop, ohne Neu-Lemmatisierung).
         # Mit --terms-file: genau die gelisteten Ausdrücke; sonst automatisch erkennen.
         try:
-            from nlp_pipeline.name_removal import (
+            from nlp_pipeline.s08_name_removal import (
                 build_stop_n_corpus, strip_terms_corpus, load_terms, derive_stop_n_cfg)
         except ImportError:
-            from name_removal import (
+            from s08_name_removal import (
                 build_stop_n_corpus, strip_terms_corpus, load_terms, derive_stop_n_cfg)
 
         out_dir = _processed_dir.parent / (_processed_dir.name + "-n")

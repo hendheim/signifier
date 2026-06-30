@@ -341,7 +341,6 @@ signifier
 ├───nlp_pipeline
 │       pipeline_config.py
 │       pipeline_utils.py
-│       s08_name_removal.py
 │       s01_pos_tag.py
 │       s01_preprocessing.py
 │       s01_vocabulary.py
@@ -350,6 +349,8 @@ signifier
 │       s04_cosine.py
 │       s05_cosine_intervals.py
 │       s06_tfidf_rank.py
+│       s07_word_vectors.py
+│       s08_name_removal.py
 │       tt_s01_stop_pos_tag.py
 │       tt_s02_topics.py
 │       tt_s03_dtti.py
