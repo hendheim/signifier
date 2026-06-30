@@ -41,19 +41,17 @@ import pandas as pd
 # Import der gemeinsamen Utils
 try:
     from .pipeline_utils import (
-        detect_delimiter, read_csv_auto,
-        identify_content_column, identify_content_column_strict,
-        identify_metadata_columns, identify_id_column,
+        detect_delimiter,
+        identify_content_column_strict, identify_metadata_columns,
         identify_year_columns, get_year_series,
-        has_column, safe_filename, detect_year_range,
+        has_column, safe_filename,
     )
 except ImportError:
     from pipeline_utils import (
-        detect_delimiter, read_csv_auto,
-        identify_content_column, identify_content_column_strict,
-        identify_metadata_columns, identify_id_column,
+        detect_delimiter,
+        identify_content_column_strict, identify_metadata_columns,
         identify_year_columns, get_year_series,
-        has_column, safe_filename, detect_year_range,
+        has_column, safe_filename,
     )
 
 

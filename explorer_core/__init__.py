@@ -24,6 +24,6 @@ oder eigenen Skripten verwendet werden (didaktisch nützlich).
 
 from .schema import MetadataSchema, find_column  # noqa: F401
 from .data_store import (  # noqa: F401
-    DataStore, ModelStore, DEFAULT_PATHS, PATH_LABELS,
+    DataStore, ModelStore, DEFAULT_PATHS, PATH_LABELS, PATH_CATEGORIES,
     read_csv_auto, detect_delimiter, detect_project_root,
 )

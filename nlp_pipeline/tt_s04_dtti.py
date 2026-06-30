@@ -11,11 +11,11 @@ Postprocessing für DTTI-Matrix:
 Beispielaufruf (CLI):
 
     python nlp_pipeline/tt_s04_dtti.py `
-        --dtti-matrix-norm output/processed_termset/Termset_Gegenstände_1.2/Termset_Gegenstände_1.2_dtti_matrix_norm.csv `
-        --topic-rank-file output/processed_termset/Termset_Gegenstände_1.2/Termset_Gegenstände_1.2_tag_topic_rank.csv `
+        --dtti-matrix-norm output/processed_termset/Termset_Gegenstände_1.2/topics_v3/Termset_Gegenstände_1.2_dtti_matrix_norm.csv `
+        --topic-rank-file output/processed_termset/Termset_Gegenstände_1.2/topics_v3/Termset_Gegenstände_1.2_tag_topic_rank.csv `
         --metadata-file korpus/korpus.csv `
         --meta-sep ";" `
-        --output-dir output/processed_termset/Termset_Gegenstände_1.2 `
+        --output-dir output/processed_termset/Termset_Gegenstände_1.2/topics_v3 `
         --top-n-docs 50 `
         --top-k-topics 10 `
         --max-rank 30
@@ -30,7 +30,7 @@ Programmatischer Aufruf (run):
         topic_rank_file=Path("..._tag_topic_rank.csv"),
         metadata_file=Path("korpus.csv"),
         meta_sep=";",
-        output_dir=Path("output/processed_termset/Termset_Begriffe_2.3"),
+        output_dir=Path("output/processed_termset/Termset_Begriffe_2.3/topics_v3"),
         top_n_docs=50,
         top_k_topics=10,
         max_rank=30,
@@ -44,7 +44,6 @@ import re
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-import numpy as np
 import pandas as pd
 
 

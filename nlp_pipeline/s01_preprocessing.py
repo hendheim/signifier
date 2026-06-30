@@ -26,9 +26,9 @@ Beispielaufruf:
         --input korpus/korpus.csv \\
         --output-dir output/processed_corpus \\
         --delimiter auto \\
-        --replacements resources/replacements_v1.json \\
-        --stopwords resources/stopwords_v1.txt \\
-        --salat resources/ocr_post-correction_dictionary_v1.txt \\
+        --replacements resources/preprocessing_lists/replacements_v1.json \\
+        --stopwords resources/preprocessing_lists/stopwords_v1.txt \\
+        --salat resources/preprocessing_lists/ocr_post-correction_dictionary_v1.txt \\
         --spacy-model de_core_news_lg
 """
 
@@ -37,7 +37,7 @@ import json
 import re
 import string
 from pathlib import Path
-from typing import Dict, Set, Tuple, List, Optional
+from typing import Dict, Set, Tuple, List
 
 import pandas as pd
 import spacy
@@ -45,15 +45,13 @@ import spacy
 # Import der gemeinsamen Utils
 try:
     from .pipeline_utils import (
-        detect_delimiter, read_csv_auto,
-        identify_content_column, identify_metadata_columns,
-        identify_id_column, has_column, safe_filename
+        detect_delimiter,
+        identify_content_column, identify_id_column, apply_replacements
     )
 except ImportError:
     from pipeline_utils import (
-        detect_delimiter, read_csv_auto,
-        identify_content_column, identify_metadata_columns,
-        identify_id_column, has_column, safe_filename
+        detect_delimiter,
+        identify_content_column, identify_id_column, apply_replacements
     )
 
 
@@ -75,32 +73,6 @@ def load_word_list(path: Path) -> Set[str]:
         return set()
     with path.open("r", encoding="utf-8") as f:
         return {line.strip() for line in f if line.strip()}
-
-
-def apply_replacements(text: str, replacements: dict) -> str:
-    """Wendet String- und Regex-Ersetzungen an."""
-    
-    def is_regex(pattern: str) -> bool:
-        regex_indicators = [
-            r'\(\?', r'\[.+\]', r'\\b', r'\\B', r'\\d', r'\\w', r'\\s',
-            r'[^\\][\*\+\?]', r'\{\d+', r'^\^', r'\$$', r'[^\\]\|'
-        ]
-        for indicator in regex_indicators:
-            if re.search(indicator, pattern):
-                return True
-        return False
-    
-    for pattern, replacement in replacements.items():
-        if is_regex(pattern):
-            try:
-                text = re.sub(pattern, replacement, text)
-            except re.error as e:
-                print(f"⚠️  Regex-Fehler: '{pattern}' - {e}")
-                continue
-        else:
-            text = text.replace(pattern, replacement)
-    
-    return text
 
 
 EXTENDED_PUNCTUATION = string.punctuation + "»«„§‹›—''⸗■"
@@ -183,7 +155,10 @@ def lemmatize_text(text: str, nlp, chunk_chars: int = 200_000) -> str:
         doc = nlp(text)
         return " ".join(_cased_lemma(tok) for tok in doc if not tok.is_space)
     out = []
-    for doc in nlp.pipe(_text_chunks(text, limit)):
+    # ponytail: batch_size=1 hält den spaCy-Tok2vec pro Chunk klein; ohne das
+    # bündelt nlp.pipe viele Chunks zu EINER Riesenmatrix (→ MemoryError bei
+    # langen Texten). Identische Lemmas, nur geringerer Durchsatz.
+    for doc in nlp.pipe(_text_chunks(text, limit), batch_size=1):
         out.extend(_cased_lemma(tok) for tok in doc if not tok.is_space)
     return " ".join(out)
 
@@ -397,9 +372,9 @@ Beispiel:
       --input korpus/korpus.csv \\
       --output-dir output/processed_corpus \\
       --delimiter auto \\
-      --replacements resources/replacements_v1.json \\
-      --stopwords resources/stopwords_v1.txt \\
-      --salat resources/ocr_post-correction_dictionary_v1.txt \\
+      --replacements resources/preprocessing_lists/replacements_v1.json \\
+      --stopwords resources/preprocessing_lists/stopwords_v1.txt \\
+      --salat resources/preprocessing_lists/ocr_post-correction_dictionary_v1.txt \\
       --spacy-model de_core_news_lg
         """
     )

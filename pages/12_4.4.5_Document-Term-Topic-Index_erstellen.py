@@ -10,7 +10,6 @@ DTTI-Matrizen (Tab "DTTI berechnen"), ``tt_s04_dtti.py`` verarbeitet sie nach
 die App-Funktionen erkannt (date wie year).
 """
 
-import sys
 import io
 import contextlib
 import importlib.util
@@ -21,7 +20,7 @@ import streamlit as st
 from ui_helpers import get_store, get_schema, show_error, APP_DIR
 from explorer_core.data_store import detect_delimiter, read_csv_auto
 
-st.set_page_config(page_title="Document-Term-Topic-Index", layout="wide")
+st.set_page_config(page_title="Document-Term-Topic-Index erstellen", layout="wide")
 st.title("🧮 Document-Term-Topic-Index (DTTI)")
 st.caption("Es werden DTTI-Matrizen erzeugt und nachverarbeitet.")
 
@@ -119,7 +118,7 @@ with tab_calc:
                                    key="s03_tw")
     topic_rank_file = _glob_select("Topic-Rangliste (tag_topic_rank)",
                                    ["output/processed_termset/**/*tag_topic_rank*.csv",
-                                    "output/processed_topics/*rank*.csv"],
+                                    "output/processed_topics/**/*rank*.csv"],
                                    key="s03_rank")
     tfidf_file = _glob_select("TF-IDF-Matrix",
                               ["output/dtm_tfidf*/tfidf*.csv"], key="s03_tfidf")
@@ -201,7 +200,13 @@ with tab_calc:
             try:
                 s03 = _load("tt_s03_dtti", "tt_s03_dtti.py")
                 termset_basename = Path(termset_file).stem
-                output_dir = project_root / out_dir3 / termset_basename
+                # Zwischenordner = Name des Topic-Modells, mit dem der DTTI
+                # berechnet wird (Ordner der Distribution/Topic-Words unter
+                # resources/topic-models/). Ergebnis: <Termset>/<Topic-Modell>/.
+                topic_model_name = (Path(doc_topic_file).parent.name
+                                    or Path(topic_word_file).parent.name)
+                output_dir = (project_root / out_dir3 / termset_basename
+                              / topic_model_name)
                 log3 = _run_capture(
                     s03.run,
                     termset_file=termset_file, topic_word_file=topic_word_file,

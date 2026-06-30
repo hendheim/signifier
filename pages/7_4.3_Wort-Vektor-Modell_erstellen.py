@@ -136,8 +136,11 @@ def _count_corpus_tokens(input_dir: Path, pattern: str,
     diag["docs"] = len(df)
     if content_col is None:
         return diag
-    texts = df[content_col].astype(str)
-    diag["tokens"] = int(texts.apply(lambda x: len(x.split())).sum())
+    col = df[content_col]
+    if isinstance(col, pd.DataFrame):          # doppelte content-Spaltennamen → erste
+        col = col.iloc[:, 0]
+    texts = col.fillna("").astype(str)         # NaN/Zahlen sicher zu Strings
+    diag["tokens"] = int(texts.map(lambda x: len(str(x).split())).sum())
     return diag
 
 
@@ -165,8 +168,8 @@ def _parse_pairs(text: str):
 # ---------------------------------------------------------------------------
 # Seite
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="Wortvektormodell erstellen", layout="wide")
-st.title("🧮 Wortvektormodell erstellen")
+st.set_page_config(page_title="Wort-Vektor-Modell erstellen", layout="wide")
+st.title("🧮 Wort-Vektor-Modell erstellen")
 st.caption("Word2Vec-Modellbildung (Pipeline-Schritt s07) als eigener Schritt - "
            "getrennt von der Vorverarbeitung. Setzt voraus, dass die "
            "Vorverarbeitung (insbesondere korpus_gen) bereits gelaufen ist.")
@@ -228,7 +231,7 @@ if tokens > 0:
     st.caption(f"Grundlage `{fname}` (Trennzeichen {diag['sep']!r}): "
                f"~{tokens:,} Tokens, {docs:,} Dokumente → Kategorie **{cat}**. "
                "Felder unten sind entsprechend voreingestellt (Quellen: "
-               "Altszyler et al. 2017, HistWords/COHA, gensim-Defaults).")
+               "Altszyler et al. 2017, HistWords, COHA, gensim-Defaults).")
 else:
     st.caption("Noch keine `korpus_gen`-Datei gefunden (entsteht in der "
                "Vorverarbeitung, Schritt 5). Voreinstellung anhand der "
@@ -335,7 +338,7 @@ st.divider()
 st.subheader("5 · Qualität des Modells")
 st.caption("Zuerst das erzeugte Modell laden, dann Kennzahlen und eine "
            "wissenschaftliche Metrik prüfen. Für die ausführliche Analyse "
-           "(Vergleich, Stabilität, diachrone Drift) siehe die Seite 'Wortvektoren'.")
+           "(Vergleich, Stabilität, diachrone Drift) siehe die Seite 'Wort-Vektoren'.")
 
 if st.button("Modell laden & prüfen", key="wvm_check"):
     st.session_state["wvm_loaded"] = True

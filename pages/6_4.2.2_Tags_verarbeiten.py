@@ -21,8 +21,8 @@ import streamlit as st
 from ui_helpers import get_store, show_error
 from explorer_core import tag_processing
 
-st.set_page_config(page_title="POS-Tags verarbeiten", layout="wide")
-st.title("🧩 Semantische Tags verarbeiten")
+st.set_page_config(page_title="Tags verarbeiten", layout="wide")
+st.title("🧩 Tags verarbeiten")
 st.caption("Aus der getaggten POS-Liste Tag-Statistiken, Matrizen und ein "
            "nach TF-IDF sortiertes Tagset erzeugen (Modul 3).")
 
@@ -35,7 +35,6 @@ if script is None:
     st.error("`tt_s01_stop_pos_tag.py` wurde im Projektordner nicht "
              "gefunden. Bitte den Projektordner auf der Startseite prüfen.")
     st.stop()
-st.caption(f"Verwendetes Skript: `{script.relative_to(project_root)}`")
 
 # ---------------------------------------------------------------------------
 # 1) Eingaben
@@ -63,7 +62,7 @@ tfidf_file = Path(st.text_input("TF-IDF-Rangliste (erste Spalte = Wort)",
 output_dir = Path(st.text_input("Ausgabeordner",
                                 value=str(project_root / "output" / "processed_tag")))
 
-max_combo = st.number_input("max-combo-size (Größe der Tag-Kombinationen)",
+max_combo = st.number_input("Anzahl der Tag-Kombinationen",
                             min_value=1, max_value=5, value=3, step=1)
 
 # ---------------------------------------------------------------------------

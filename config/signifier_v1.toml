@@ -2,9 +2,9 @@
 input_path       = "korpus/korpus.csv"
 output_dir       = "output/processed_corpus"
 delimiter        = ","
-replacements_path = "resources/replacements_dummy.json"
-stopwords_path    = "resources/stopwords_v3.txt"
-salat_path        = "resources/ocr_post-correction_dictionary_dummy.txt"
+replacements_path = "resources/preprocessing_lists/preprocessing_lists/replacements_v5.json"
+stopwords_path    = "resources/preprocessing_lists/stopwords_v4.txt"
+salat_path        = "resources/preprocessing_lists/ocr_post-correction_dictionary_dummy.txt"
 spacy_model       = "de_core_news_lg"
 
 [step2_s01_2_vocabular]
@@ -14,10 +14,8 @@ delimiter  = ","
 # interval_size = 15                                  # dynamische Intervallgroesse (Jahre)
 # intervals = ["1782-1852","1853-1864","1865-1876","1877-1891"]  # explizite Intervalle (Vorrang)
 
-[step3_s01_3_statistics]
-preprocessed_dir = "output/processed_corpus"
-output_dir       = "output/statistics"
-delimiter        = ","
+# [step3_s01_3_statistics] entfernt – Statistiken laufen jetzt über die
+# Dashboard-Seite "Statistik".
 
 [step4_s01_4_pos_tag]
 input_json = "output/vocabular/vocab_full_stop.json"
@@ -29,9 +27,9 @@ limit      = 5000
 input_path       = "output/processed_corpus/korpus_min.csv"
 output_path      = "output/processed_corpus/korpus_gen.csv"
 delimiter        = ","
-replacements_path = "resources/replacements_dummy.json"
-stopwords_path    = "resources/stopwords_v3.txt"
-salat_path        = "resources/ocr_post-correction_dictionary_dummy.txt"
+replacements_path = "resources/preprocessing_lists/replacements_v5.json"
+stopwords_path    = "resources/preprocessing_lists/stopwords_v4.txt"
+salat_path        = "resources/preprocessing_lists/ocr_post-correction_dictionary_dummy.txt"
 spacy_model       = "de_core_news_lg"
 # intervals = ["1782-1852","1853-1864","1865-1876","1877-1891"]  # erzeugt korpus_gen_<I>.csv -> Word2Vec je Intervall (Schritt 10)
 
@@ -51,7 +49,7 @@ cos_output = "output/intervals/cosine_stop"
 sep        = ","
 
 [step9_s06_tfidf_rank]
-input_dir  = "output"
+input_dir  = "output/dtm_tfidf_stop"   # gezielt die Haupt-TF-IDF (verhindert, dass auch '-n'-Ordner oder eigene Rang-Ausgaben mitgescannt werden)
 output_dir = "output/tfidf_rank"
 top_n      = 2000
 
@@ -61,4 +59,4 @@ output_dir  = "output/word2vec_models"
 pattern     = "korpus_gen*.csv"
 
 [run]
-steps = ["1","2","3","4","5","6","7","8","9","10"]  # optional: welche Schritte laufen 
+steps = ["1","2","4","5","6","7","8","9","10"]  # Schritt 3 (Statistik) -> Seite "Statistik" 

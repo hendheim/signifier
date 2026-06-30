@@ -110,33 +110,50 @@ DEFAULT_PATHS: Dict[str, str] = {
     "termset": "resources/termsets/Termset_Test.csv",
     # Tag-Topic-Explorer
     "topic_words": "resources/topic-models/sklearn_lda_40/sklearn_lda_40_topic_words.csv",
-    "ranks": "output/processed_termset/Termset_Test/Termset_Test_tag_topic_rank.csv",
-    "relevance": "output/processed_termset/Termset_Test/Termset_Test_tag_topic_relevance.csv",
-    "counts_per_year": "output/processed_termset/Termset_Test/Termset_Test_dtti_topdocs_topic_counts_per_year.csv",
-    "top10_year_value": "output/processed_topics/document-topics-distribution_sklearn_lda_40_pro_text_topdocs_year_value.csv",
-    "top10_value_per_text": "output/processed_topics/document-topics-distribution_sklearn_lda_40_pro_text_topdocs_value_per_text_topic.csv",
+    "ranks": "output/processed_termset/Termset_Test/sklearn_lda_40/Termset_Test_tag_topic_rank.csv",
+    "relevance": "output/processed_termset/Termset_Test/sklearn_lda_40/Termset_Test_tag_topic_relevance.csv",
+    "counts_per_year": "output/processed_termset/Termset_Test/sklearn_lda_40/Termset_Test_dtti_topdocs_topic_counts_per_year.csv",
+    "top10_year_value": "output/processed_topics/sklearn_lda_40/document-topics-distribution_sklearn_lda_40_pro_text_topdocs_year_value.csv",
+    "top10_value_per_text": "output/processed_topics/sklearn_lda_40/document-topics-distribution_sklearn_lda_40_pro_text_topdocs_value_per_text_topic.csv",
     "tokens_year": "output/statistics/year_count_tokens.csv",
-    "global_topdocs": "output/processed_topics/document-topics-distribution_sklearn_lda_40_pro_text_topdocs_year_value.csv",
 }
 
-# Beschriftungen für die Daten-Seite des Dashboards
+# Beschriftungen für die Daten-Seite des Dashboards (Reihenfolge folgt den
+# Kategorien in PATH_CATEGORIES).
 PATH_LABELS: Dict[str, str] = {
-    "corpus": "Korpus (verarbeitet, z. B. korpus_stop.csv)",
-    "dtm": "Document-Term-Matrix (DTM)",
-    "tfidf": "TF-IDF-Matrix",
-    "metadata": "Metadaten der Texte",
-    "cosine": "Kosinus-Matrix der Texte",
-    "topics_dist": "Document-Topic-Verteilung",
-    "w2v_model": "Word2Vec-Modell",
-    "termset": "Termset (Pivot-Tabelle)",
-    "topic_words": "Top-Topic-Words-Matrix",
-    "ranks": "Rangliste der Topics (relativ zum Termset)",
-    "relevance": "Relevanzscore der Topics (relativ zum Termset)",
-    "counts_per_year": "Topic-Counts pro Jahr (Termset, TopDocs)",
-    "top10_year_value": "Summierter Relevanzscore pro Jahr (Termset)",
-    "top10_value_per_text": "Summierter Relevanzscore pro Text (Termset)",
+    # Korpus
+    "corpus": "Korpus",
+    "metadata": "Metadaten",
     "tokens_year": "Tokenverteilung pro Jahr",
-    "global_topdocs": "Text-Topic-Relevanzscore pro Jahr (global)",
+    "dtm": "DTM",
+    "tfidf": "TF-IDF",
+    "cosine": "Kosinus-Matrix",
+    # Topic-Model
+    "topics_dist": "Document-Topic-Matrix",
+    "topic_words": "Topic-Word-Matrix",
+    # Verarbeitete Topics (Postprocessing, output/processed_topics/<topic-model>/)
+    "top10_year_value": "Topic-Ranking pro Jahr",
+    "top10_value_per_text": "Topic-Ranking pro Text",
+    # Wort-Vektor-Modell
+    "w2v_model": "Wort-Vektor-Modell",
+    # Termset
+    "termset": "Termset",
+    # Document-Termset-Topics-Verarbeitungen (output/processed_termset/<Termset>/)
+    "ranks": "Term-Topic-Ranking",
+    "relevance": "Term-Topic-Score",
+    "counts_per_year": "Term-Topic-Year-Matrix",
+}
+
+
+# Gruppierung der Datenquellen für die Lade-Seite (Reihenfolge = Anzeige).
+PATH_CATEGORIES: Dict[str, List[str]] = {
+    "Korpus": ["corpus", "metadata", "tokens_year", "dtm", "tfidf", "cosine"],
+    "Topic-Model": ["topics_dist", "topic_words"],
+    "Verarbeitete Topics": ["top10_year_value", "top10_value_per_text"],
+    "Wort-Vektor-Modell": ["w2v_model"],
+    "Termset": ["termset"],
+    "Document-Termset-Topics-Verarbeitungen": ["ranks", "relevance",
+                                               "counts_per_year"],
 }
 
 
@@ -151,17 +168,22 @@ DISCOVERY_PATTERNS: Dict[str, List[str]] = {
     "tfidf": ["output/dtm_tfidf*/tfidf*.csv"],
     "metadata": ["korpus/metadaten.csv"],
     "cosine": ["output/cosine/*.csv"],
-    "topics_dist": ["resources/topic-models/topics*/document-topics-distribution*.csv"],
+    # Topic-Model-Quellen: resources/topic-models/<Modell>/ (Ordnername beliebig,
+    # daher '*' statt 'topics*'; Dateinamen mit Fallbacks für beide Formate).
+    "topics_dist": ["resources/topic-models/*/document-topics-distribution*.csv",
+                    "resources/topic-models/*/*document*topic*.csv"],
     "w2v_model": ["output/word2vec_models/*.model", "output/word2vec_models/*.kv"],
     "termset": ["resources/termsets/*.csv"],
-    "topic_words": ["resources/topic-models/topics*/*words*tag*.csv"],
-    "ranks": ["output/processed_termset/Termset*/*_tag_topic_rank.csv"],
-    "relevance": ["output/processed_termset/Termset*/*_tag_topic_relevance.csv"],
-    "counts_per_year": ["output/processed_termset/Termset*/*_dtti_topdocs_topic_counts_per_year.csv"],
-    "top10_year_value": ["output/processed_termset/Termset*/*_dtti_topdocs_top10_year_value.csv"],
-    "top10_value_per_text": ["output/processed_termset/Termset*/*_dtti_topdocs_top10_value_per_text_topic.csv"],
+    "topic_words": ["resources/topic-models/*/*topic_words*.csv",
+                    "resources/topic-models/*/*words*tag*.csv"],
+    # DTTI-Ergebnisse: output/processed_termset/<Termset>/<Topic-Modell>/...
+    "ranks": ["output/processed_termset/**/*_tag_topic_rank.csv"],
+    "relevance": ["output/processed_termset/**/*_tag_topic_relevance.csv"],
+    "counts_per_year": ["output/processed_termset/**/*_dtti_topdocs_topic_counts_per_year.csv"],
+    # Verarbeitete Topics: output/processed_topics/<topic-model>/...
+    "top10_year_value": ["output/processed_topics/**/*_topdocs_year_value.csv"],
+    "top10_value_per_text": ["output/processed_topics/**/*_topdocs_value_per_text_topic.csv"],
     "tokens_year": ["output/statistics/*tokens*.csv"],
-    "global_topdocs": ["output/processed_topics/*year*value*.csv"],
 }
 
 
@@ -231,6 +253,111 @@ class DataStore:
             if hit is not None:
                 self.set_path(key, hit)
         return found
+
+    # ------------------------------------------------------------------
+    # Ergebnis-Ordner-Auswahl (processed_termset / processed_topics)
+    # ------------------------------------------------------------------
+
+    # Datenquellen je processed_termset-Ordner (ein Unterordner je Termset).
+    TERMSET_TOPIC_KEYS = ["ranks", "relevance", "counts_per_year"]
+    # Datenquellen je processed_topics-Ordner (ein Unterordner je Topic-Modell).
+    PROCESSED_TOPICS_KEYS = ["top10_year_value", "top10_value_per_text"]
+    # Topic-Model-Quellen je resources/topic-models/<Modell>/-Ordner.
+    TOPIC_MODEL_KEYS = ["topics_dist", "topic_words"]
+
+    def processed_termset_root(self) -> Path:
+        """Basisordner der Termset-Ergebnisse (ein Unterordner je Termset)."""
+        return self.project_root / "output" / "processed_termset"
+
+    def processed_topics_root(self) -> Path:
+        """Basisordner der Topic-Postprocessings (ein Unterordner je Topic-Modell)."""
+        return self.project_root / "output" / "processed_topics"
+
+    def topic_models_root(self) -> Path:
+        """Basisordner der Topic-Modelle (ein Unterordner je Modell)."""
+        return self.project_root / "resources" / "topic-models"
+
+    @staticmethod
+    def _list_dirs(base: Path) -> List[str]:
+        if not base.exists():
+            return []
+        return sorted(p.name for p in base.iterdir() if p.is_dir())
+
+    def list_termset_dirs(self) -> List[str]:
+        """Namen der Unterordner in output/processed_termset/ (je Termset)."""
+        return self._list_dirs(self.processed_termset_root())
+
+    def list_dtti_dirs(self) -> List[str]:
+        """Zweistufige Ordner '<Termset>/<Topic-Modell>' unter processed_termset/."""
+        base = self.processed_termset_root()
+        if not base.exists():
+            return []
+        out: List[str] = []
+        for termset in sorted(p for p in base.iterdir() if p.is_dir()):
+            for model in sorted(c for c in termset.iterdir() if c.is_dir()):
+                out.append(f"{termset.name}/{model.name}")
+        return out
+
+    def list_processed_topics_dirs(self) -> List[str]:
+        """Namen der Unterordner in output/processed_topics/ (je Topic-Modell)."""
+        return self._list_dirs(self.processed_topics_root())
+
+    def list_topic_model_dirs(self) -> List[str]:
+        """Namen der Topic-Modelle unter resources/topic-models/."""
+        return self._list_dirs(self.topic_models_root())
+
+    def _apply_dir(self, base: Path, folder: str,
+                   keys: List[str]) -> Dict[str, Optional[Path]]:
+        """Setzt die Pfade der Schlüssel auf die passenden Dateien in ``base/folder``.
+
+        Der Dateiname-Glob wird aus DISCOVERY_PATTERNS abgeleitet (nur der Teil
+        hinter dem letzten ``/``) und rekursiv gesucht, sodass auch eine tiefere
+        Ordnerstruktur (z. B. <Termset>/<Topic-Modell>/) gefunden wird. Es werden
+        nur tatsächlich vorhandene Dateien gesetzt (kein Fehler bei fehlenden).
+        Gibt ``{key: gefundener Pfad | None}`` zurück.
+        """
+        target = base / folder
+        applied: Dict[str, Optional[Path]] = {}
+        for key in keys:
+            hit = None
+            for pattern in DISCOVERY_PATTERNS.get(key, []):
+                fname = pattern.rsplit("/", 1)[-1]  # nur der Dateiname-Glob
+                matches = sorted(target.rglob(fname)) if target.exists() else []
+                if matches:
+                    hit = matches[0]
+                    break
+            applied[key] = hit
+            if hit is not None:
+                self.set_path(key, hit)
+        return applied
+
+    def apply_termset_dir(self, folder: str,
+                          keys: Optional[List[str]] = None) -> Dict[str, Optional[Path]]:
+        """Übernimmt die Termset-Ergebnisse aus einem processed_termset-Unterordner."""
+        return self._apply_dir(self.processed_termset_root(), folder,
+                               keys or self.TERMSET_TOPIC_KEYS)
+
+    def apply_processed_topics_dir(self, folder: str,
+                                   keys: Optional[List[str]] = None) -> Dict[str, Optional[Path]]:
+        """Übernimmt die verarbeiteten Topics aus einem processed_topics-Unterordner."""
+        return self._apply_dir(self.processed_topics_root(), folder,
+                               keys or self.PROCESSED_TOPICS_KEYS)
+
+    def apply_topic_model_dir(self, model: str) -> Dict[str, Optional[Path]]:
+        """Übernimmt zu einem Topic-Modell beide Quellgruppen:
+
+        - Topic-Model-Dateien (Document-Topic-Matrix, Topic-Word-Matrix) aus
+          ``resources/topic-models/<model>/``
+        - Verarbeitete Topics (Topic-Ranking pro Jahr/Text) aus
+          ``output/processed_topics/<model>/``
+
+        Es werden nur tatsächlich vorhandene Dateien gesetzt.
+        """
+        applied = self._apply_dir(self.topic_models_root(), model,
+                                  self.TOPIC_MODEL_KEYS)
+        applied.update(self._apply_dir(self.processed_topics_root(), model,
+                                       self.PROCESSED_TOPICS_KEYS))
+        return applied
 
     # ------------------------------------------------------------------
     # Loader (alle geben pandas-DataFrames zurück)
@@ -371,11 +498,6 @@ class DataStore:
             self._cache["tokens_year"] = self._read("tokens_year")
         return self._cache["tokens_year"]  # type: ignore[return-value]
 
-    def load_global_topdocs(self) -> pd.DataFrame:
-        if "global_topdocs" not in self._cache:
-            self._cache["global_topdocs"] = self._read("global_topdocs")
-        return self._cache["global_topdocs"]  # type: ignore[return-value]
-
     # ------------------------------------------------------------------
     # Abgeleitete Daten
     # ------------------------------------------------------------------
@@ -442,6 +564,6 @@ class ModelStore:
 
 
 __all__ = [
-    "DataStore", "ModelStore", "DEFAULT_PATHS", "PATH_LABELS",
+    "DataStore", "ModelStore", "DEFAULT_PATHS", "PATH_LABELS", "PATH_CATEGORIES",
     "read_csv_auto", "detect_delimiter", "detect_project_root", "find_column",
 ]

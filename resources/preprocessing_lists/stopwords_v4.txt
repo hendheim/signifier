@@ -606,7 +606,6 @@ fortsetzt
 fortsetzte
 fortsetzten
 fragte
-frau
 frei
 freie
 freier
@@ -1034,7 +1033,6 @@ mancherlei
 mancherorts
 manches
 manchmal
-mann
 margin
 massgebend
 massgebende

@@ -31,7 +31,6 @@ from typing import Dict, Iterator, List, Optional, Tuple
 STEP_LABELS: Dict[str, str] = {
     "1": "s01_1 · Vorverarbeitung (korpus_min/lem/stop)",
     "2": "s01_2 · Vokabular",
-    "3": "s01_3 · Statistik",
     "4": "s01_4 · POS-Tagging der Top-5000",
     "5": "s02 · Gensim-Preprocessing (korpus_gen)",
     "6": "s03 · DTM- & TF-IDF-Matrizen",
@@ -67,11 +66,23 @@ def build_command(
     python_exe: Optional[str] = None,
     intervals: Optional[List[str]] = None,
     w2v_params: Optional[Dict] = None,
+    remove_names: bool = False,
+    detect_names: bool = False,
+    terms_file: Optional[Path] = None,
+    make_pos: bool = False,
+    pos_file: Optional[Path] = None,
+    top_terms: Optional[int] = None,
 ) -> List[str]:
     """Baut den Subprozess-Befehl: python -u run_pipeline.py …
 
     ``-u`` schaltet die Ausgabepufferung ab, damit das Log live ankommt.
     ``w2v_params`` (optional) werden als JSON an ``--w2v-params`` übergeben.
+    ``detect_names`` erkennt nur Eigennamen (``--detect-names``); mit ``make_pos``
+    wird zuerst eine neue POS-Liste für ``top_terms`` Top-Ausdrücke erzeugt, mit
+    ``pos_file`` die PROPN aus einer vorhandenen POS-Liste geladen.
+    ``remove_names`` startet die namensbereinigte Variante (``--remove-names``),
+    optional mit ``terms_file`` (kuratierte Auswahl); die Schritte steuert der
+    Runner selbst.
     """
     exe = python_exe or sys.executable
     try:
@@ -81,7 +92,19 @@ def build_command(
     cmd = [exe, "-u", str(runner_path),
            "--project-root", str(project_root),
            "--config", cfg_arg]
-    if steps:
+    if detect_names:
+        cmd += ["--detect-names"]
+        if make_pos:
+            cmd += ["--make-pos"]
+            if top_terms:
+                cmd += ["--top-terms", str(int(top_terms))]
+        elif pos_file:
+            cmd += ["--pos-file", str(pos_file)]
+    elif remove_names:
+        cmd += ["--remove-names"]
+        if terms_file:
+            cmd += ["--terms-file", str(terms_file)]
+    elif steps:
         cmd += ["--steps", *steps]
     if intervals:
         cmd += ["--intervals", *intervals]
@@ -99,6 +122,12 @@ def stream_pipeline(
     python_exe: Optional[str] = None,
     intervals: Optional[List[str]] = None,
     w2v_params: Optional[Dict] = None,
+    remove_names: bool = False,
+    detect_names: bool = False,
+    terms_file: Optional[Path] = None,
+    make_pos: bool = False,
+    pos_file: Optional[Path] = None,
+    top_terms: Optional[int] = None,
 ) -> Iterator[Tuple[str, object]]:
     """Startet die Pipeline und liefert Ereignisse als (typ, inhalt):
 
@@ -111,7 +140,10 @@ def stream_pipeline(
             elif kind == "done": ...
     """
     cmd = build_command(runner_path, project_root, config_path, steps, python_exe,
-                        intervals=intervals, w2v_params=w2v_params)
+                        intervals=intervals, w2v_params=w2v_params,
+                        remove_names=remove_names, detect_names=detect_names,
+                        terms_file=terms_file, make_pos=make_pos, pos_file=pos_file,
+                        top_terms=top_terms)
     # Kindprozess auf UTF-8 zwingen, damit Emoji-Ausgaben der Pipeline auch
     # unter Windows (cp1252) nicht zu UnicodeEncodeError führen.
     import os

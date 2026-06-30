@@ -44,8 +44,7 @@ try:
         identify_id_column,
         identify_year_columns,
         get_year_series,
-        detect_year_range,
-        has_column, safe_filename
+        safe_filename
     )
 except ImportError:
     from pipeline_utils import (
@@ -55,8 +54,7 @@ except ImportError:
         identify_id_column,
         identify_year_columns,
         get_year_series,
-        detect_year_range,
-        has_column, safe_filename
+        safe_filename
     )
 
 

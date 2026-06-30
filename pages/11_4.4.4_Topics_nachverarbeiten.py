@@ -21,14 +21,14 @@ import streamlit as st
 from ui_helpers import get_store, get_schema, show_error, APP_DIR
 from explorer_core.data_store import detect_delimiter, read_csv_auto
 
-st.set_page_config(page_title="Topics nachbearbeiten", layout="wide")
+st.set_page_config(page_title="Topics nachverarbeiten", layout="wide")
 st.title("🧮 Topics nachbearbeiten")
 st.caption("Topic-Postprocessing (tt_s02): Ranking, Top-N-Dokumente, Metadaten-Mapping, Jahr-Aggregationen.")
 
 store = get_store()
 schema = get_schema()
 project_root = Path(store.project_root)
-korpus_csv = project_root / "korpus" / "korpus.csv"
+metadaten_csv = project_root / "korpus" / "metadaten.csv"
 
 
 def _load(modname: str, filename: str):
@@ -71,6 +71,12 @@ input_file = _glob_select(
      "resources/topic-models/**/*document*topic*.csv"], key="s02_in")
 out_dir = Path(st.text_input("Ausgabeordner", value="output/processed_topics",
                              key="s02_out"))
+# Die Ausgaben kommen in einen Unterordner mit dem Namen des Topic-Modells
+# (= Ordnername der gewählten Distribution unter resources/topic-models/).
+model_name = input_file.parent.name if input_file else ""
+target_dir = out_dir / model_name if model_name else out_dir
+if model_name:
+    st.caption(f"Ausgabe-Unterordner (Topic-Modell): `{target_dir}`")
 c1, c2, c3 = st.columns(3)
 top_n = c1.number_input("Top-N Dokumente pro Topic", 1, 500, 50,
                         key="s02_topn")
@@ -78,7 +84,7 @@ header_row = c2.number_input("Header-Zeile (0-basiert)", 0, 10, 0,
                              key="s02_hdr")
 index_col = c3.number_input("Index-Spalte (0-basiert, -1 = keine)", -1, 20,
                             0, key="s02_idx")
-meta_file = Path(st.text_input("Metadaten-Datei", value=str(korpus_csv),
+meta_file = Path(st.text_input("Metadaten-Datei", value=str(metadaten_csv),
                                key="s02_meta"))
 
 # Trenner und Jahresspalte automatisch über die bestehenden App-Funktionen
@@ -116,7 +122,7 @@ if st.button("Topics verarbeiten (s02)", key="s02_btn", type="primary"):
             meta_sep = (sep_override.strip() or detected_sep or "auto")
             year_col = (year_override.strip() or (detected_year_col or ""))
             argv = ["--input-file", str(input_file),
-                    "--output-dir", str(project_root / out_dir),
+                    "--output-dir", str(project_root / target_dir),
                     "--header-row", str(int(header_row)),
                     "--index-col", str(int(index_col)),
                     "--top-n-docs", str(int(top_n)),

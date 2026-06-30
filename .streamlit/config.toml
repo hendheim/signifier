@@ -1,0 +1,8 @@
+# Streamlit-Konfiguration
+# toolbarMode = "viewer"  -> blendet Entwickler-Optionen inkl. "Deploy"-Button aus
+#   "viewer"    : Deploy + Dev-Optionen versteckt, übriges Menü bleibt
+#   "minimal"   : komplette Toolbar/Menü versteckt (nur extern gesetzte Punkte)
+#   "developer" : Deploy sichtbar
+#   "auto"      : Default (Deploy lokal sichtbar)
+[client]
+toolbarMode = "viewer"

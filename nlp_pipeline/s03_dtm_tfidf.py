@@ -43,14 +43,14 @@ try:
         detect_delimiter,
         identify_content_column,
         identify_metadata_columns,
-        has_column, safe_filename
+        safe_filename
     )
 except ImportError:
     from pipeline_utils import (
         detect_delimiter,
         identify_content_column,
         identify_metadata_columns,
-        has_column, safe_filename
+        safe_filename
     )
 
 

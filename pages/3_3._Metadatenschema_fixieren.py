@@ -20,7 +20,7 @@ from ui_helpers import (get_store, get_schema, reload_schema, show_error,
                         SCHEMA_PATH)
 
 st.set_page_config(page_title="Schema", layout="wide")
-st.title("🗂️ Metadatenschema")
+st.title("🗂️ Metadatenschema fixieren")
 st.caption(f"Konfigurationsdatei: `{SCHEMA_PATH}`")
 
 store = get_store()

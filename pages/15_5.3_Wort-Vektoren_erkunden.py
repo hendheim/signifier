@@ -21,13 +21,13 @@ import streamlit as st
 import pandas as pd
 
 from ui_helpers import (get_store, get_models, show_error, df_with_download,
-                        fig_with_download, parse_terms)
+                        parse_terms)
 from explorer_core.analysis_vectors import (most_similar, compare_embeddings,
                                             semantic_network)
 from explorer_core.viz_export import save_figure
 from explorer_core import wvm_metrics as wm
 
-st.set_page_config(page_title="Wortvektoren", layout="wide")
+st.set_page_config(page_title="Wortvektoren erkunden", layout="wide")
 st.title("🧭 Wortvektoren")
 st.caption("Semantische Ähnlichkeiten aus dem Word2Vec-Modell")
 

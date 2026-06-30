@@ -16,7 +16,7 @@ import io
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple
 
 import pandas as pd
 
@@ -122,6 +122,36 @@ def read_csv_auto(file_path: Path, delimiter: Optional[str] = None, **kwargs) ->
     
     df = pd.read_csv(file_path, sep=delimiter, encoding="utf-8", **kwargs)
     return df, delimiter
+
+
+# =============================================================================
+# TEXT-ERSETZUNGEN
+# =============================================================================
+
+def apply_replacements(text: str, replacements: dict) -> str:
+    """Wendet String- und Regex-Ersetzungen an."""
+
+    def is_regex(pattern: str) -> bool:
+        regex_indicators = [
+            r'\(\?', r'\[.+\]', r'\\b', r'\\B', r'\\d', r'\\w', r'\\s',
+            r'[^\\][\*\+\?]', r'\{\d+', r'^\^', r'\$$', r'[^\\]\|'
+        ]
+        for indicator in regex_indicators:
+            if re.search(indicator, pattern):
+                return True
+        return False
+
+    for pattern, replacement in replacements.items():
+        if is_regex(pattern):
+            try:
+                text = re.sub(pattern, replacement, text)
+            except re.error as e:
+                print(f"⚠️  Regex-Fehler: '{pattern}' - {e}")
+                continue
+        else:
+            text = text.replace(pattern, replacement)
+
+    return text
 
 
 # =============================================================================
@@ -397,41 +427,3 @@ def safe_filename(name: str) -> str:
     for char in [" ", "/", "\\", ":", "*", "?", '"', "<", ">", "|"]:
         result = result.replace(char, "_")
     return result
-
-
-def print_dataframe_info(df: pd.DataFrame, label: str = "DataFrame"):
-    """Gibt Informationen über einen DataFrame aus."""
-    content_col = identify_content_column(df)
-    metadata_cols = identify_metadata_columns(df, content_col)
-    id_col = identify_id_column(df)
-    year_first, year = identify_year_columns(df)
-    
-    print(f"\n📊 {label}:")
-    print(f"   Zeilen: {len(df)}")
-    print(f"   Spalten: {len(df.columns)}")
-    print(f"   Content-Spalte: {content_col or '—'}")
-    print(f"   ID-Spalte: {id_col or '—'}")
-    print(f"   Jahr-Spalten: year_first={year_first or '—'}, year={year or '—'}")
-    print(f"   Metadaten: {len(metadata_cols)} Spalten")
-
-
-# =============================================================================
-# TESTS
-# =============================================================================
-
-if __name__ == "__main__":
-    # Einfacher Selbsttest
-    print("Pipeline Utils - Selbsttest")
-    print("=" * 40)
-    
-    # Test-DataFrame erstellen
-    test_df = pd.DataFrame({
-        "_id": [1, 2, 3],
-        "title": ["A", "B", "C"],
-        "year_first": [1800, 1850, 1900],
-        "content_stop": ["text1", "text2", "text3"],
-    })
-    
-    print_dataframe_info(test_df, "Test-DataFrame")
-    
-    print("\n✅ Selbsttest abgeschlossen.")

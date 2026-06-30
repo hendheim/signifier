@@ -30,13 +30,24 @@ from explorer_core.analysis_texts import (reduce_from_cosine,
                                           text_dendrograms)
 from explorer_core.viz_export import save_figure, format_hyperparams
 
-st.set_page_config(page_title="Texte", layout="wide")
+st.set_page_config(page_title="Texte erkunden", layout="wide")
 st.title("📚 Texte")
 st.caption("Ähnlichkeitslandkarte und Dendrogramme der Dokumente "
            "(aus der Kosinus-Matrix)")
 
 store = get_store()
 schema = get_schema()
+
+
+@st.cache_data(show_spinner="Projektion wird berechnet …")
+def _cached_reduce(method, cosine_df, meta, cluster_k, cluster_method, hp_items):
+    """Cacht die 2D-Projektion. Vor allem UMAP ist beim ersten Aufruf teuer
+    (einmalige Numba-Kompilierung); identische Streudiagramme (gleiche Methode,
+    Daten und Hyperparameter) werden danach nicht neu gerechnet, sondern aus dem
+    Cache geliefert."""
+    return reduce_from_cosine(cosine_df, meta, method=method,
+                              cluster_k=cluster_k, cluster_method=cluster_method,
+                              hp=dict(hp_items))
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +70,9 @@ def _scatter_subtab(method: str, facet_options, label_meta_cols):
                 "UMAP n_neighbors", 2, 200, 15, key=f"tx_nb_{method}", help='Zahl der Nachbarn, die UMAP zur Schätzung der lokalen Struktur heranzieht. **Kleine** Werte (z. B. 5–15) betonen feine, lokale Nachbarschaften; **große** Werte (50–100) bewahren stärker die globale Gesamtstruktur. Muss kleiner als die Anzahl der Texte sein.')
             hp["min_dist"] = st.slider("UMAP min_dist", 0.0, 1.0, 0.1, 0.05,
                                        key=f"tx_md_{method}", help='Mindestabstand, den Punkte in der 2D-Projektion zueinander haben dürfen. **Kleine** Werte (≈0) packen Punkte dicht in Cluster zusammen; **große** Werte (bis 1) verteilen sie gleichmäßiger und betonen die grobe Anordnung.')
+            st.caption("ℹ️ Der **erste** UMAP-Aufruf nach App-Start kompiliert "
+                       "einmalig (~30 s); danach ist das Ergebnis gecacht und "
+                       "erscheint sofort. PCA/MDS/t-SNE sind ohne Wartezeit.")
         elif method == "pca":
             hp["svd_solver"] = c3.selectbox(
                 "PCA svd_solver", ["auto", "full", "randomized"],
@@ -120,10 +134,10 @@ def _scatter_subtab(method: str, facet_options, label_meta_cols):
         try:
             cosine_df = store.load_cosine()
             meta = store.load_metadata()
-            df = reduce_from_cosine(
-                cosine_df, meta, method=method,
-                cluster_k=int(cluster_k) if do_cluster else None,
-                cluster_method=cluster_method, hp=hp)
+            df = _cached_reduce(
+                method, cosine_df, meta,
+                int(cluster_k) if do_cluster else None,
+                cluster_method, tuple(sorted(hp.items())))
             st.session_state[f"tx_df_{method}"] = df
         except Exception as e:
             show_error(e)

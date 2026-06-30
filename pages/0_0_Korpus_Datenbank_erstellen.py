@@ -52,6 +52,25 @@ def _decode(upload) -> str:
 def _edit_and_save(corpus_df: pd.DataFrame, state_key: str,
                    id_column: str = "id"):
     st.markdown(f"**{len(corpus_df)} Dokumente** zusammengestellt.")
+
+    # Read-only Überblick: ID + Volltext-Vorschau. Zeigt, dass die Texte
+    # tatsächlich geladen wurden. (Die editierbare Tabelle unten enthält nur die
+    # Metadaten – der Volltext wird beim Speichern per ID ergänzt und würde die
+    # metadaten.csv aufblähen, wenn er dort editierbar wäre.)
+    if cb.CONTENT_COLUMN in corpus_df.columns and not corpus_df.empty:
+        key_col = id_column if id_column in corpus_df.columns else cb.ID_COLUMN
+        cols = [key_col] if key_col in corpus_df.columns else []
+        prev = corpus_df[cols + [cb.CONTENT_COLUMN]].copy()
+        prev[cb.CONTENT_COLUMN] = (prev[cb.CONTENT_COLUMN].astype(str)
+                                   .str.replace(r"\s+", " ", regex=True)
+                                   .str.slice(0, 300))
+        n_leer = int((prev[cb.CONTENT_COLUMN].str.strip() == "").sum())
+        hinweis = (f" — ⚠️ {n_leer} ohne Text: ID-Spalte der CSV muss dem "
+                   "Dateinamen (ohne .txt) entsprechen") if n_leer else ""
+        st.caption(f"Geladene Volltexte (Vorschau, gekürzt){hinweis}:")
+        st.dataframe(prev.rename(columns={cb.CONTENT_COLUMN: "content (Vorschau)"}),
+                     use_container_width=True, hide_index=True, height=240)
+
     meta_view = cb.split_corpus_metadata(corpus_df)
     st.caption("Metadaten prüfen und ggf. bearbeiten (der Volltext wird beim "
                "Speichern per ID ergänzt):")
@@ -121,7 +140,10 @@ with tab_txt:
 with tab_xml:
     st.caption("Der **Body** wird automatisch als `content` übernommen "
                "(`.//tei:text//tei:body`, Fallback `.//tei:text`). Die "
-               "Metadaten wählst du unten über die im XML vorhandenen Pfadziele.")
+               "Metadaten wählst du unten über die im `teiHeader` vorhandenen "
+               "Pfadziele – inkl. Attributwerten wie dem Datum in "
+               "`<date when=\"…\">` (z. B. für Nachname, Vorname, "
+               "Veröffentlichungsdatum).")
 
     use_ns = st.checkbox("TEI-Namespace verwenden (tei:)", value=True,
                          key="xml_ns",
@@ -141,15 +163,18 @@ with tab_xml:
     xml_uploads = st.file_uploader("xml-Dateien wählen", type=["xml"],
                                    accept_multiple_files=True, key="xml_up")
 
-    # 1) Vorhandene Pfadziele aus der ersten Datei ermitteln
+    # 1) Vorhandene Pfadziele ermitteln – vereinigt über mehrere Dateien, damit
+    #    auch in der ersten Datei fehlende Felder (z. B. ein anonymer Erstautor)
+    #    auswählbar werden. Attributwerte (etwa Datum in <date when="…">) sind
+    #    ebenfalls dabei.
     if st.button("🔍 XML-Pfade analysieren", key="xml_scan"):
         if not xml_uploads:
             st.warning("Bitte zuerst xml-Dateien auswählen.")
         else:
             try:
-                first = _decode(xml_uploads[0])
-                st.session_state["xml_opts"] = cb.discover_xml_paths(
-                    first, use_namespace=use_ns)
+                texts = [_decode(u) for u in xml_uploads[:25]]
+                st.session_state["xml_opts"] = cb.discover_xml_paths_multi(
+                    texts, use_namespace=use_ns)
                 st.session_state.setdefault("xml_n_meta", 3)
             except Exception as e:
                 show_error(e)
@@ -164,10 +189,14 @@ with tab_xml:
         n_meta = st.session_state.setdefault("xml_n_meta", 3)
         rows = []
         for i in range(n_meta):
-            col_p, col_n = st.columns([3, 2])
+            col_p, col_n = st.columns([4, 2])
             sel = col_p.selectbox(
                 f"Pfadziel {i + 1}", paths, key=f"xml_path_{i}",
-                format_func=lambda p: f"{cb.path_leaf(p)} — {sample.get(p, '')[:45]}")
+                format_func=lambda p: f"{cb.path_label(p)}  ·  {sample.get(p, '')[:30]}",
+                help="Der volle Pfad ist sichtbar – so lassen sich mehrere "
+                     "gleichnamige Ziele (z. B. mehrere 'surname' an "
+                     "verschiedenen Stellen) anhand des Pfades unterscheiden "
+                     "und vergleichen.")
             name = col_n.text_input("Spaltenname", value=cb.path_leaf(sel),
                                     key=f"xml_name_{i}")
             if name.strip() and sel:

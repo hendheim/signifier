@@ -389,10 +389,17 @@ def match_text_to_metadata(text_value: str, metadata_df: pd.DataFrame,
             if row_id.lower() == text_str or row_id == str(text_value):
                 return row_id
 
-    # Textuelle Anzeige-Spalten (z. B. Autor, Titel) + Jahre aus dem Schema
-    display = [c for c in schema.display_columns(metadata_df, n=3)
-               if c in metadata_df.columns]
-    text_cols = [c for c in display if metadata_df[c].dtype == "object"]
+    # Textuelle Felder für das Rückmatching: GENAU die, aus denen die
+    # DTTI-Pipeline (tt_s04.format_metadata_row) den Text baut – author_surname,
+    # title, source. Sonst schlägt das Matching fehl, wenn das Schema andere
+    # Anzeigespalten konfiguriert hat (→ leere ID-Spalte). Fallback: Schema-
+    # Anzeigespalten.
+    fmt_fields = ["author_surname", "title", "source", "author"]
+    text_cols = [c for c in fmt_fields
+                 if c in metadata_df.columns and metadata_df[c].dtype == "object"]
+    if not text_cols:
+        text_cols = [c for c in schema.display_columns(metadata_df, n=3)
+                     if c in metadata_df.columns and metadata_df[c].dtype == "object"]
     years = schema.get_year_series(metadata_df)
 
     def year_str(idx) -> str:
@@ -462,14 +469,14 @@ def tt_texts_rank(df: pd.DataFrame, metadata_df: Optional[pd.DataFrame],
         work = work.sort_values(value_col, ascending=False).head(per_topic)
         work["rank"] = work[value_col].rank(method="min", ascending=False).astype(int)
 
-    work["_id"] = ""
+    work["id"] = ""
     matched = 0
     if metadata_df is not None:
         for idx, row in work.iterrows():
             matched_id = match_text_to_metadata(str(row[text_col]), metadata_df, schema)
             if matched_id:
-                work.at[idx, "_id"] = matched_id
+                work.at[idx, "id"] = matched_id
                 matched += 1
 
-    result = work.rename(columns={text_col: "text"})[["_id", "text", "rank"]]
+    result = work.rename(columns={text_col: "text"})[["id", "text", "rank"]]
     return result.sort_values(["rank", "text"]).reset_index(drop=True), matched

@@ -18,9 +18,6 @@ und skizziert sie jeweils als Tabelle mit einem vollständigen Beispiel­dokumen
 import streamlit as st
 import pandas as pd
 
-from explorer_core.data_store import PATH_LABELS
-from ui_helpers import get_store, get_models, get_schema, show_error
-
 st.set_page_config(page_title="signifier-Dashboard", page_icon="📖", layout="wide")
 
 st.title("📖 *signifier-Dashboard*")

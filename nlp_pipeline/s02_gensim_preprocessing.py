@@ -35,9 +35,9 @@ Beispielaufruf:
         --input output/processed_corpus/korpus_min.csv \\
         --output output/processed_corpus/korpus_gen.csv \\
         --delimiter auto \\
-        --replacements resources/replacements_v1.json \\
-        --stopwords resources/stopwords_v1.txt \\
-        --salat resources/ocr_post-correction_dictionary.txt \\
+        --replacements resources/preprocessing_lists/replacements_v1.json \\
+        --stopwords resources/preprocessing_lists/stopwords_v1.txt \\
+        --salat resources/preprocessing_lists/ocr_post-correction_dictionary.txt \\
         --spacy-model de_core_news_lg
 """
 
@@ -56,18 +56,16 @@ try:
         detect_delimiter,
         identify_content_column,
         identify_metadata_columns,
-        identify_year_columns,
         get_year_series,
-        has_column
+        apply_replacements
     )
 except ImportError:
     from pipeline_utils import (
         detect_delimiter,
         identify_content_column,
         identify_metadata_columns,
-        identify_year_columns,
         get_year_series,
-        has_column
+        apply_replacements
     )
 
 
@@ -164,32 +162,6 @@ def load_replacements(path: Path | None) -> dict:
 # Token-/Text-Level Funktionen
 # ---------------------------------------------------------
 
-def apply_replacements(text: str, replacements: dict) -> str:
-    """Wendet String- und Regex-Ersetzungen an."""
-    
-    def is_regex(pattern: str) -> bool:
-        regex_indicators = [
-            r'\(\?', r'\[.+\]', r'\\b', r'\\B', r'\\d', r'\\w', r'\\s',
-            r'[^\\][\*\+\?]', r'\{\d+', r'^\^', r'\$$', r'[^\\]\|'
-        ]
-        for indicator in regex_indicators:
-            if re.search(indicator, pattern):
-                return True
-        return False
-    
-    for pattern, replacement in replacements.items():
-        if is_regex(pattern):
-            try:
-                text = re.sub(pattern, replacement, text)
-            except re.error as e:
-                print(f"⚠️  Regex-Fehler: '{pattern}' - {e}")
-                continue
-        else:
-            text = text.replace(pattern, replacement)
-    
-    return text
-
-
 def normalize_punctuation(text: str, keep: set[str] = ALLOWED_PUNCT) -> str:
     """
     Normalisiert Sonderzeichen:
@@ -257,7 +229,12 @@ def lemmatize(text: str, nlp) -> str:
     """
     out = []
     limit = min(200_000, nlp.max_length)
-    docs = nlp.pipe(_text_chunks(text, limit)) if len(text) > limit else [nlp(text)]
+    # ponytail: batch_size=1 verarbeitet jeden Chunk einzeln. Ohne das bündelt
+    # nlp.pipe viele Chunks und spaCys tok2vec allokiert EINE Matrix über alle
+    # Tokens des Bündels (→ MemoryError bei langen Texten). Größer batchen erst,
+    # wenn reichlich RAM verfügbar ist.
+    docs = (nlp.pipe(_text_chunks(text, limit), batch_size=1)
+            if len(text) > limit else [nlp(text)])
     for doc in docs:
         for token in doc:
             if token.is_space:

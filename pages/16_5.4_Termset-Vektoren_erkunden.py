@@ -15,20 +15,30 @@ Analysen auf Basis der Termset-Datei (getaggte Begriffsliste, z. B. aus
 
 import streamlit as st
 
-from ui_helpers import (get_store, get_models, show_error, df_with_download,
-                        fig_with_download)
-from explorer_core.analysis_vectors import (cluster_termset,
+from ui_helpers import (get_store, get_models, show_error, df_with_download)
+from explorer_core.analysis_vectors import (compute_termset_clusters,
+                                            draw_termset_clusters,
                                             termset_wordcloud,
                                             termset_dendrograms)
 
 from explorer_core.viz_export import save_figure
 
-st.set_page_config(page_title="Termset", layout="wide")
+st.set_page_config(page_title="Termset-Vektoren erkunden", layout="wide")
 st.title("🏷️ Termset")
 st.caption("Cluster, Wortwolke und Dendrogramme der getaggten Begriffsliste")
 
 store = get_store()
 models = get_models()
+
+
+@st.cache_data(show_spinner="Cluster werden berechnet …")
+def _cached_cluster_compute(model_path, df_terms, k, n_neighbors, min_dist, _kv):
+    """Cacht den teuren Cluster-/UMAP-Teil. ``_kv`` (führender Unterstrich) wird
+    von Streamlit NICHT gehasht; der Cache-Schlüssel ist der Modellpfad plus
+    Termset-Inhalt und die Hyperparameter. So zahlt man die einmalige
+    UMAP-Numba-Kompilierung nur einmal, und identische Parameter liefern sofort."""
+    return compute_termset_clusters(_kv, df_terms, k=k, n_neighbors=n_neighbors,
+                                    min_dist=min_dist)
 
 tab_cluster, tab_cloud, tab_dendro = st.tabs(
     ["Cluster", "Wortwolke", "Dendrogramme"]
@@ -55,9 +65,13 @@ with tab_cluster:
         try:
             kv = models.load()
             df_terms = store.load_termset()
-            fig, df_clusters, clusters = cluster_termset(
-                kv, df_terms, k=int(cl_k), n_neighbors=int(cl_neighbors),
-                min_dist=float(cl_mindist), resolution=cl_res,
+            # Teurer Teil (UMAP + Clustering) gecacht; Zeichnen bleibt billig,
+            # sodass Bildgröße/Labels ohne Neuberechnung anpassbar sind.
+            terms, labels, coords, proj = _cached_cluster_compute(
+                str(models.model_path), df_terms, int(cl_k),
+                int(cl_neighbors), float(cl_mindist), kv)
+            fig, df_clusters, clusters = draw_termset_clusters(
+                terms, labels, coords, proj, resolution=cl_res,
                 show_labels=cl_labels)
             save_figure(fig, "termset_cluster", params={
                 "Anzahl Cluster (k)": int(cl_k), "UMAP n_neighbors": int(cl_neighbors),
