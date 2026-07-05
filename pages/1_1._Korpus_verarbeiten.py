@@ -174,7 +174,7 @@ runner_path = APP_DIR / "run_pipeline.py"
 
 st.info(
     "Diese Seite startet die vorhandene Pipeline – sie schreibt Ergebnisse "
-    "nach `output/`. Lange Schritte (Word2Vec, POS-Tagging) können einige "
+    "nach `output/`. Lange Schritte (Lemmatisierung, POS-Tagging) können einige "
     "Minuten dauern. Das Log erscheint live."
 )
 
