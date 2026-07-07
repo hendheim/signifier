@@ -123,7 +123,8 @@ def document_frequencies(corpus: pd.DataFrame, metadata: pd.DataFrame,
                          use_regex: bool = False,
                          case_sensitive: bool = False,
                          normalize: bool = True,
-                         scale: int = 10000) -> pd.DataFrame:
+                         scale: int = 10000,
+                         token_counts: Optional[pd.Series] = None) -> pd.DataFrame:
     """Trefferanzahl pro Dokument für eine Liste von Ausdrücken
     (Legacy-Tab 'Dokument-Frequenz').
 
@@ -131,6 +132,10 @@ def document_frequencies(corpus: pd.DataFrame, metadata: pd.DataFrame,
     (Tokenzahl je Dokument) und die normalisierte Trefferdichte
     ``count / Textlänge × scale`` ausgegeben – so sind Texte
     unterschiedlicher Länge vergleichbar (Default: Treffer pro 10 000 Tokens).
+
+    ``token_counts`` (Series, Index = doc_id) liefert die Textlängen
+    vorberechnet (z. B. aus ``TokenIndex.token_counts()``) – erspart die
+    Neu-Tokenisierung des gesamten Korpus pro Aufruf.
     """
     terms = [t.strip() for t in terms if t.strip()]
     if not terms:
@@ -146,7 +151,11 @@ def document_frequencies(corpus: pd.DataFrame, metadata: pd.DataFrame,
     result = corpus[["doc_id"]].copy()
     result["count"] = sum(counts)
     if normalize:
-        result["text_laenge"] = texts.apply(lambda x: len(tokenize(x))).astype(int)
+        if token_counts is not None:
+            result["text_laenge"] = (corpus["doc_id"].astype(str)
+                                     .map(token_counts).fillna(0).astype(int))
+        else:
+            result["text_laenge"] = texts.apply(lambda x: len(tokenize(x))).astype(int)
 
     # Metadaten anhand der ID-Spalte des Schemas joinen
     meta = metadata.copy()
@@ -176,14 +185,31 @@ def document_frequencies(corpus: pd.DataFrame, metadata: pd.DataFrame,
 
 def concordance(corpus: pd.DataFrame, metadata: pd.DataFrame, term: str,
                 display_cols: List[str], context: int = 50,
-                max_hits: int = 5000) -> pd.DataFrame:
-    """KWIC-Konkordanz mit Kontextfenster (Legacy-Tab 'Konkordanz')."""
+                max_hits: int = 5000,
+                case_sensitive: bool = True,
+                whole_word: bool = False,
+                author_col: Optional[str] = None) -> pd.DataFrame:
+    """KWIC-Konkordanz mit Kontextfenster (Legacy-Tab 'Konkordanz').
+
+    Optionen:
+    - ``case_sensitive`` (Standard an, wie bisher): "Hund" trifft nicht "hund".
+    - ``whole_word``: nur die genaue Suchzeichenfolge als ganzes Wort
+      (Wortgrenzen), nicht als Teil längerer Wörter ("Hund" ≠ "Hunde").
+    - ``author_col``: Name der Autor-Spalte in den Metadaten. Wenn gesetzt,
+      erhält jede Trefferzeile die Spalte ``treffer_autor`` = Gesamtzahl der
+      Treffer in allen Dokumenten desselben Autors. Dafür wird das Korpus
+      auch nach Erreichen von ``max_hits`` vollständig durchgezählt (nur die
+      Tabellenzeilen sind gedeckelt).
+    """
     term = term.strip()
     if not term:
         raise ValueError("Bitte einen Suchbegriff angeben.")
 
-    # Case-sensitiv: "Hund" trifft nicht "hund" (passend zum gecaseten Korpus).
-    pattern = re.compile(f"(.{{0,{context}}})({re.escape(term)})(.{{0,{context}}})")
+    core = re.escape(term)
+    if whole_word:
+        core = rf"\b{core}\b"
+    flags = 0 if case_sensitive else re.IGNORECASE
+    pattern = re.compile(f"(.{{0,{context}}})({core})(.{{0,{context}}})", flags)
 
     meta_lookup: Dict[str, dict] = {}
     if "doc_id" in metadata.columns:
@@ -191,42 +217,61 @@ def concordance(corpus: pd.DataFrame, metadata: pd.DataFrame, term: str,
         for _, m in metadata.iterrows():
             meta_lookup[str(m["doc_id"])] = {c: m.get(c, "") for c in cols}
 
+    author_lookup: Dict[str, str] = {}
+    if (author_col and author_col in metadata.columns
+            and "doc_id" in metadata.columns):
+        author_lookup = {str(d): str(a) for d, a in
+                         zip(metadata["doc_id"], metadata[author_col])}
+
     rows = []
+    doc_hits: Counter = Counter()
     for _, r in corpus.iterrows():
         text = str(r.get("text", ""))
         doc_id = str(r.get("doc_id", ""))
         meta_vals = meta_lookup.get(doc_id, {})
         for m in pattern.finditer(text):
-            row = {"doc_id": doc_id,
-                   **meta_vals,
-                   "left": m.group(1).replace("\n", " "),
-                   "match": m.group(2),
-                   "right": m.group(3).replace("\n", " ")}
-            rows.append(row)
-            if len(rows) >= max_hits:
-                return pd.DataFrame(rows)
-    return pd.DataFrame(rows)
+            doc_hits[doc_id] += 1
+            if len(rows) < max_hits:
+                rows.append({"doc_id": doc_id,
+                             **meta_vals,
+                             "left": m.group(1).replace("\n", " "),
+                             "match": m.group(2),
+                             "right": m.group(3).replace("\n", " ")})
+        # Ohne Autor-Zählung kann nach Erreichen des Limits abgebrochen
+        # werden (Verhalten wie bisher); mit Zählung braucht es den
+        # vollständigen Durchlauf für korrekte Gesamtzahlen.
+        if not author_lookup and len(rows) >= max_hits:
+            break
+
+    df = pd.DataFrame(rows)
+    if author_lookup and not df.empty:
+        author_hits: Counter = Counter()
+        for d, c in doc_hits.items():
+            author_hits[author_lookup.get(d, "")] += c
+        df["treffer_autor"] = df["doc_id"].map(
+            lambda d: int(author_hits[author_lookup.get(d, "")]))
+    return df
 
 
 # ----------------------------------------------------------------------------
 # Kollokationen
 # ----------------------------------------------------------------------------
 
-def collocations(corpus: pd.DataFrame, targets: List[str], window: int = 5,
-                 top_n: int = 100, min_freq: int = 3, ngram: int = 1,
-                 metric: str = "FREQ") -> pd.DataFrame:
-    """Kollokationsanalyse mit FREQ- oder PMI-Score (Legacy-Tab 'Kollokation')."""
-    targets = [t.strip() for t in targets if t.strip()]
-    if not targets:
-        raise ValueError("Bitte Zielausdrücke angeben.")
+def _collocations_from_tokens(docs_tokens, targets: List[str], window: int = 5,
+                              top_n: int = 100, min_freq: int = 3,
+                              ngram: int = 1, metric: str = "FREQ") -> pd.DataFrame:
+    """Kern der Kollokationsanalyse über bereits tokenisierte Dokumente.
 
+    Wird sowohl vom Legacy-Einstieg ``collocations`` (tokenisiert selbst)
+    als auch vom ``token_index``-Modul (liefert Tokens aus dem Index)
+    verwendet – identische Zähl- und Score-Logik für beide Wege.
+    """
     total_tokens = 0
     freq_w: Counter = Counter()
     freq_tw: Dict[str, Counter] = defaultdict(Counter)
     freq_t: Counter = Counter()
 
-    for _, r in corpus.iterrows():
-        tokens = tokenize(r.get("text", ""))
+    for tokens in docs_tokens:
         if not tokens:
             continue
         ngrams = list(_iter_ngrams(tokens, ngram))
@@ -271,21 +316,43 @@ def collocations(corpus: pd.DataFrame, targets: List[str], window: int = 5,
                .reset_index(drop=True))
 
 
-def collocation_documents(corpus: pd.DataFrame, metadata: pd.DataFrame,
-                          target: str, collocate: str, display_cols: List[str],
-                          window: int = 5, ngram: int = 1) -> pd.DataFrame:
-    """Dokumente, in denen ein Kollokationspaar vorkommt (Klick-Detail im Legacy-Tab)."""
-    target, collocate = target.strip(), collocate.strip()
+def collocations(corpus: pd.DataFrame, targets: List[str], window: int = 5,
+                 top_n: int = 100, min_freq: int = 3, ngram: int = 1,
+                 metric: str = "FREQ") -> pd.DataFrame:
+    """Kollokationsanalyse mit FREQ- oder PMI-Score (Legacy-Tab 'Kollokation')."""
+    targets = [t.strip() for t in targets if t.strip()]
+    if not targets:
+        raise ValueError("Bitte Zielausdrücke angeben.")
+    texts = corpus["text"] if "text" in corpus.columns else []
+    return _collocations_from_tokens(
+        (tokenize(t) for t in texts), targets, window=window,
+        top_n=top_n, min_freq=min_freq, ngram=ngram, metric=metric)
 
-    meta_lookup: Dict[str, dict] = {}
-    if "doc_id" in metadata.columns:
-        cols = [c for c in display_cols if c in metadata.columns]
-        for _, m in metadata.iterrows():
-            meta_lookup[str(m["doc_id"])] = {c: m.get(c, "") for c in cols}
 
+def join_display_metadata(df: pd.DataFrame, metadata: pd.DataFrame,
+                          display_cols: List[str]) -> pd.DataFrame:
+    """Hängt Metadaten-Anzeigespalten an eine (doc_id, …)-Tabelle an.
+
+    Spaltenreihenfolge wie in den Legacy-Tabs: doc_id, Metadaten, Rest.
+    """
+    cols = [c for c in display_cols if c in metadata.columns]
+    if df.empty or "doc_id" not in metadata.columns or not cols:
+        return df
+    meta = metadata[["doc_id"] + cols].drop_duplicates("doc_id").copy()
+    meta["doc_id"] = meta["doc_id"].astype(str)
+    out = df.copy()
+    out["doc_id"] = out["doc_id"].astype(str)
+    out = out.merge(meta, on="doc_id", how="left")
+    rest = [c for c in df.columns if c != "doc_id"]
+    return out[["doc_id"] + cols + rest]
+
+
+def _collocation_documents_from_tokens(doc_ids, docs_tokens, target: str,
+                                       collocate: str, window: int = 5,
+                                       ngram: int = 1) -> pd.DataFrame:
+    """Kern der Belegdokument-Suche über bereits tokenisierte Dokumente."""
     rows = []
-    for _, d in corpus.iterrows():
-        tokens = tokenize(d.get("text", ""))
+    for doc_id, tokens in zip(doc_ids, docs_tokens):
         positions = [i for i, w in enumerate(tokens) if w == target]
         if not positions:
             continue
@@ -299,12 +366,27 @@ def collocation_documents(corpus: pd.DataFrame, metadata: pd.DataFrame,
                        + list(_iter_ngrams(tokens[i + 1:hi], ngram)))
             count += sum(1 for c in ctx if c == collocate)
         if count > 0:
-            doc_id = str(d.get("doc_id", ""))
-            rows.append({"doc_id": doc_id, **meta_lookup.get(doc_id, {}), "freq": count})
+            rows.append({"doc_id": str(doc_id), "freq": count})
 
     if not rows:
         return pd.DataFrame(columns=["doc_id", "freq"])
-    return pd.DataFrame(rows).sort_values("freq", ascending=False).reset_index(drop=True)
+    return (pd.DataFrame(rows)
+            .sort_values("freq", ascending=False, kind="mergesort")
+            .reset_index(drop=True))
+
+
+def collocation_documents(corpus: pd.DataFrame, metadata: pd.DataFrame,
+                          target: str, collocate: str, display_cols: List[str],
+                          window: int = 5, ngram: int = 1) -> pd.DataFrame:
+    """Dokumente, in denen ein Kollokationspaar vorkommt (Klick-Detail im Legacy-Tab)."""
+    target, collocate = target.strip(), collocate.strip()
+    texts = corpus["text"] if "text" in corpus.columns else []
+    doc_ids = (corpus["doc_id"].astype(str) if "doc_id" in corpus.columns
+               else pd.Series([""] * len(corpus)))
+    df = _collocation_documents_from_tokens(
+        doc_ids, (tokenize(t) for t in texts), target, collocate,
+        window=window, ngram=ngram)
+    return join_display_metadata(df, metadata, display_cols)
 
 
 # ----------------------------------------------------------------------------

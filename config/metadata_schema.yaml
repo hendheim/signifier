@@ -1,75 +1,37 @@
-# =============================================================================
-# METADATENSCHEMA für das FaDeLive-Dashboard
-# =============================================================================
-# Diese Datei macht das Dashboard unabhängig vom konkreten Korpus:
-# Statt fest im Code verdrahteter Spaltennamen (author_surname, year, ...)
-# wird hier beschrieben, welche Spalten welche Rolle spielen.
-#
-# Alles ist OPTIONAL: Was hier leer bleibt oder fehlt, wird automatisch
-# aus den Daten erkannt (Auto-Detection, siehe explorer_core/schema.py).
-# Für ein neues Korpus reicht es also oft, gar nichts zu ändern –
-# oder nur die wenigen Zeilen unter "ROLLEN".
-#
-# Tipp für Laien: Diese Datei muss NICHT von Hand bearbeitet werden.
-# Im Dashboard gibt es die Seite "Schema", auf der die Zuordnung per
-# Dropdown vorgenommen und hier gespeichert werden kann.
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# ROLLEN: Welche Spalte übernimmt welche Funktion?
-# -----------------------------------------------------------------------------
-# Kandidatenlisten: Die erste vorhandene Spalte gewinnt (Groß-/Kleinschreibung
-# wird ignoriert). Eigene Spaltennamen einfach VORNE ergänzen.
-
-# Eindeutige Dokument-ID
 id_candidates:
-  - "_id"
-  - "id"
-  - "doc_id"
-  - "document_id"
-  - "filename"
-  - "file_id"
-
-# Spalte(n) mit dem Text selbst (Prioritätsreihenfolge der Verarbeitungsstufen)
+- id
+- _id
+- doc_id
+- document_id
+- filename
+- file_id
 content_candidates:
-  - "content_stop"
-  - "content_lem"
-  - "content_min"
-  - "content_gen"
-  - "content"
-  - "text"
-  - "clean_text"
-  - "body"
-  - "fulltext"
-
-# Jahresangaben: "first" hat Vorrang vor "main"
-# (im FaDeLive-Korpus: year_first = Erstausgabe, year = Auflage/Band)
+- content_stop
+- content_lem
+- content_min
+- content_gen
+- content
+- text
+- clean_text
+- body
+- fulltext
 year:
-  first_candidates: ["year_first", "Jahr_first", "jahr_first"]
-  main_candidates: ["year", "jahr", "Jahr", "year_final", "Jahr_final", "date"]
-
-# -----------------------------------------------------------------------------
-# ANZEIGE: Welche Metadaten sollen in Tabellen/Legenden voreingestellt sein?
-# -----------------------------------------------------------------------------
-# Leer lassen ([]) → das Dashboard schlägt automatisch passende
-# Nicht-ID-, Nicht-Text-Spalten der Metadatendatei vor.
+  first_candidates:
+  - date
+  - year_first
+  - Jahr_first
+  - jahr_first
+  main_candidates:
+  - year_final
+  - year
+  - jahr
+  - Jahr
+  - Jahr_final
+  - date
 display_columns:
-  - "author_surname"
-  - "title"
-  - "year_final"
-
-# Kategoriale Felder für Gruppierung/Färbung (z. B. im Streudiagramm)
-# Leer lassen ([]) → automatische Erkennung über geringe Wertevielfalt.
-facets:
-  - "textclass"
-  - "genre"
-
-# -----------------------------------------------------------------------------
-# SONSTIGES
-# -----------------------------------------------------------------------------
-# Frühestes Jahr, das in diachronen Plots berücksichtigt wird (null = alle).
-# (Die Legacy-GUIs filterten fest auf >= 1840 bzw. >= 1800.)
+- author_surname
+- title
+- year_final
+facets: []
 min_year: null
-
-# CSV-Trennzeichen: "auto" = automatisch erkennen, sonst z. B. ";" oder ","
-delimiter: "auto"
+delimiter: auto

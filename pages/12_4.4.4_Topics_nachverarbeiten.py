@@ -140,6 +140,12 @@ if st.button("Topics verarbeiten (s02)", key="s02_btn", type="primary"):
             finally:
                 sys.argv = old
             st.success("s02 abgeschlossen.")
+            if "[WARN]" in (log or ""):
+                st.warning("Der Lauf meldet Warnungen – bitte die "
+                           "[WARN]-Zeilen im Log unten prüfen (typisch: "
+                           "Dokument-IDs passen nicht zu den Metadaten oder "
+                           "keine Jahresspalte erkannt). Betroffene "
+                           "Jahr-Dateien werden dann leer erzeugt.")
             st.code(log or "(keine Ausgabe)", language="text")
         except Exception as e:
             show_error(e)

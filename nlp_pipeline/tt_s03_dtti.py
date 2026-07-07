@@ -81,6 +81,12 @@ def load_topic_word_matrix(topic_word_file: Path) -> pd.DataFrame:
     Alle Wortzellen werden normalisiert (strip + lower).
     """
     df = pd.read_csv(topic_word_file, index_col=0)
+    # Topic-Index IMMER als String führen: sind die Topic-Labels numerisch
+    # (0, 1, 2 …), liest pandas sie sonst als int – und der spätere Abgleich
+    # mit den (stets stringbasierten) Topic-Spalten der Document-Topic-
+    # Distribution schlägt fehl, sodass der Cosinuswert überall 0 wird und die
+    # DTTI-Matrix komplett auf Null kippt.
+    df.index = df.index.map(lambda x: str(x).strip())
     df = df.map(
         lambda x: normalize_token(x) if pd.notna(x) and str(x).strip() != "" else np.nan
     )
@@ -525,15 +531,25 @@ def compute_document_topic_termset_interaction(
         - df_dtm: DTM mit Frequenzen (eine Zeile pro Dokument)
         - tfidf_sums: dict Wort -> TF-IDF-Summe
     """
-    # IDs als Strings
+    # IDs als Strings – harmonisiert (strip + '.txt'-Endung entfernen),
+    # damit Topic-Verteilung und DTM auch dann zueinander finden, wenn eine
+    # Seite Dateinamen ('Doc.txt') und die andere blanke IDs ('Doc') führt.
+    # Das war die häufigste Ursache für eine komplett LEERE DTTI-Matrix.
+    def _norm_id(x) -> str:
+        s = str(x).strip()
+        return s[:-4] if s.lower().endswith(".txt") else s
+
     df_docs = df_docs.copy()
-    df_docs.index = df_docs.index.astype(str)
+    df_docs.index = [_norm_id(i) for i in df_docs.index]
+    # Topic-Spalten als String führen, damit der Abgleich mit dem (jetzt
+    # ebenfalls stringbasierten) Topic-Index der Topic-Word-Matrix greift.
+    df_docs.columns = df_docs.columns.map(lambda c: str(c).strip())
 
     df_dtm = df_dtm.copy()
     if dtm_id_col not in df_dtm.columns:
         raise ValueError(f"DTM-Datei enthält keine ID-Spalte '{dtm_id_col}'.")
 
-    df_dtm[dtm_id_col] = df_dtm[dtm_id_col].astype(str)
+    df_dtm[dtm_id_col] = df_dtm[dtm_id_col].map(_norm_id)
 
     if df_dtm.shape[1] <= dtm_start_col_index:
         raise ValueError(
@@ -563,14 +579,43 @@ def compute_document_topic_termset_interaction(
         topic_word_sets[str(topic)] = set(t_words)
         topic_word_pos[str(topic)] = {w: pos for pos, w in enumerate(t_words, start=1)}
 
+    # DTM-Zeilen einmal indizieren (erstes Vorkommen je ID, wie bisher) –
+    # statt das DataFrame pro Dokument neu zu filtern.
+    dtm_pos: Dict[str, int] = {}
+    for pos, key in enumerate(df_dtm[dtm_id_col].tolist()):
+        dtm_pos.setdefault(key, pos)
+
+    matched = sum(1 for d in df_docs.index if d in dtm_pos)
+    print(f"[INFO] DTTI: {matched} von {len(df_docs.index)} Dokumenten der "
+          f"Topic-Verteilung in der DTM gefunden.")
+    if len(df_docs.index) and matched == 0:
+        print("[WARN] KEIN Dokument der Topic-Verteilung passt zur DTM! "
+              f"Bitte die IDs der Distribution mit der DTM-Spalte "
+              f"'{dtm_id_col}' vergleichen – die DTTI-Matrizen bleiben "
+              "sonst leer.")
+
+    # Topic-Abgleich zwischen Topic-Word-Matrix und Distribution prüfen:
+    # passen die Labels nicht (Typ ODER Benennung), wird jeder Cosinuswert 0
+    # und die DTTI-Matrix damit komplett null.
+    _topic_ids = [str(t) for t in df_topics.index]
+    _topic_hits = sum(1 for t in _topic_ids if t in df_docs.columns)
+    print(f"[INFO] DTTI: {_topic_hits} von {len(_topic_ids)} Topics der "
+          "Topic-Word-Matrix in den Spalten der Topic-Verteilung gefunden.")
+    if _topic_ids and _topic_hits == 0:
+        print("[WARN] KEIN Topic-Label der Topic-Word-Matrix passt zu den "
+              "Spalten der Topic-Verteilung! Dann ist jeder Cosinuswert 0 "
+              "und die DTTI-Matrix bleibt komplett null. Bitte die "
+              f"Topic-Labels vergleichen (Matrix: {_topic_ids[:3]}… vs. "
+              f"Verteilung: {list(df_docs.columns[:3])}…).")
+
     # Iteration über Dokumente
     for doc_id in df_docs.index:
-        dtm_row = df_dtm[df_dtm[dtm_id_col] == doc_id]
-        if dtm_row.empty:
+        pos_row = dtm_pos.get(doc_id)
+        if pos_row is None:
             continue
 
         # Frequenzen: normalisierte Wortform -> freq
-        freqs_raw = dtm_row[dtm_expr_cols].iloc[0].to_dict()
+        freqs_raw = df_dtm.iloc[pos_row][dtm_expr_cols].to_dict()
         word_freqs = {
             normalize_token(col): int(freq)
             for col, freq in freqs_raw.items()
@@ -596,10 +641,11 @@ def compute_document_topic_termset_interaction(
                     weight = tfidf_val / log(pos + 1)  # score(w, T)
                     score += freq * weight
 
-            # cos(D,T)
+            # cos(D,T) – Abgleich über den String-Topic (topic_str), da
+            # df_docs.columns oben auf String normalisiert wurde.
             cos_val = (
-                float(df_docs.at[doc_id, topic])
-                if topic in df_docs.columns
+                float(df_docs.at[doc_id, topic_str])
+                if topic_str in df_docs.columns
                 else 0.0
             )
 

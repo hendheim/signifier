@@ -39,8 +39,7 @@ Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasi
 + Infoboxen zu Parametern der Verarbeitungsschritte,
 + Speicherung der Parameter.
 
-**Schlagwörter**: Begriffsgeschichte, Computational
-Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic-Modeling, word2vec
+**Schlagwörter**: Begriffsgeschichte, Computational Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic-Modeling, word2vec
 
 <br>
 
@@ -221,6 +220,8 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
 - **4.2.1 · Ausdrücke taggen** – POS-Frequenzliste um die Tags `tag1, tag2, tag3` ergänzen
   
 - **4.2.2 · Tags verarbeiten** – getaggte POS-Liste verarbeiten (`tt01`)
+
+- **4.2.3 · Termset erstellen** – Tags und Ausdrücken für die Erstellung eines Termsets auswählen
   
 - **4.3 · Wort-Vektor-Modelle erstellen** – ein Wort-Vektor-Modell wird erstellt (`s07`)
   
@@ -245,9 +246,9 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
   
 - **5.4 · Termset-Vektoren erkunden** – UMAP-Cluster, Wortwolke und Dendrogramme eines Termsets
   
-- **5.5 · Topics erkunden** – diachrone Topicverläufe ausgewählter Topics
+- **5.5 · Topics erkunden** – diachrone Topicverläufe ausgewählter Topics (**in v0.3.0 nicht funktionsfähig**)
   
-- **5.6 · Tag-Topics erkunden** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
+- **5.6 · DTTI erkunden** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
   
 
 <br>
@@ -266,7 +267,7 @@ Mit der Verarbeitung in _4.4.4 · Topics nachverarbeiten_ und _4.4.5 · Document
   `tag2` und `tag3` ergänzt werden, die Ausdrücke mit bis zu drei Kategorien
   abstrahieren (_4.2.1 · Ausdrücke taggen_),
 - daraus eine Pivot-Tabelle erzeugen (_4.2.2 · Tags verarbeiten_),
-- für die Forschungsfrage relevante Tags und Ausdrücke aus der Tabelle wählen und ein Termset bilden,
+- für die Forschungsfrage relevante Tags und Ausdrücke aus der Tabelle wählen und ein Termset bilden (_4.2.3 · Termset erstellen_)
 - Termsets auf Topics und Texte abbilden und einen Dokument-Term-Topic-Index berechnen (_4.4.4 · Topics nachverarbeiten_, _4.4.5 · Document-Term-Topic-Index erstellen_).
 
 Für die Modellierung der Topics kann das Dashboard `scikit-learn` (NMF/LDA) oder
@@ -310,6 +311,7 @@ signifier
 │       tagging.py
 │       tag_processing.py
 │       topic_tagging.py
+│       token_index.py
 │       pipeline_runner.py
 │       viz_export.py
 |
@@ -325,18 +327,19 @@ signifier
 │       4_4.1_Token-Statistik_erstellen.py
 │       5_4.2.1_Ausdrücke_taggen.py
 │       6_4.2.2_Tags_verarbeiten.py
-│       7_4.3_Wort-Vektor-Modell_erstellen.py
-│       8_4.4.1_MALLET_einrichten.py
-│       9_4.4.2_Topic-Modell_erstellen.py
-│       10_4.4.3_Topics_taggen.py
-│       11_4.4.4_Topics_nachverarbeiten.py
-│       12_4.4.5_Document-Term-Topic-Index_erstellen.py
-│       13_5.1_Ausdrücke_erkunden.py
-│       14_5.2_Texte_erkunden.py
-│       15_5.3_Wort-Vektoren_erkunden.py
-│       16_5.4_Termset-Vektoren_erkunden.py
-│       17_5.5_Topics_erkunden.py
-│       18_5.6_DTTI erkunden.py
+│       7_4.2.3_Termset_erstellen.py
+│       8_4.3_Wort-Vektor-Modell_erstellen.py
+│       9_4.4.1_MALLET_einrichten.py
+│       10_4.4.2_Topic-Modell_erstellen.py
+│       11_4.4.3_Topics_taggen.py
+│       12_4.4.4_Topics_nachverarbeiten.py
+│       13_4.4.5_Document-Term-Topic-Index_erstellen.py
+│       14_5.1_Ausdrücke_erkunden.py
+│       15_5.2_Texte_erkunden.py
+│       16_5.3_Wort-Vektoren_erkunden.py
+│       17_5.4_Termset-Vektoren_erkunden.py
+│       18_5.5_Topics_erkunden.py
+│       19_5.6_DTTI erkunden.py
 │
 ├───nlp_pipeline
 │       pipeline_config.py
@@ -357,9 +360,9 @@ signifier
 │       tt_s04_dtti.py
 │
 ├───output                            # erzeugte Daten (Pipeline + Verarbeitung)
-│        processed_corpus              # korpus_min/lem/stop.csv
+│        processed_corpus             # korpus_min/lem/stop.csv
 │        vocabular 			 				   # Vokabular und Frequenzen sowie das POS-getaggte Vokabular 
-│        statistics           
+│        statistics                   # Statistiken über die Verhältnisse von Tokens zu Metadaten
 │        dtm_tfidf_stop       				# DTM- und TF-IDF-Matrizen
 │        cosine 				 				    # Kosinus-Matrizen
 │        intervals 		     				 # intervall-spezifische Ausgaben

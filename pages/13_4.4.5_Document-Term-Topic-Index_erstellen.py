@@ -219,6 +219,12 @@ with tab_calc:
                 st.session_state["dtti_last_dir"] = str(output_dir)
                 st.success(f"DTTI berechnet (s03). Ergebnis in `{output_dir}`. "
                            "Weiter im Tab 'DTTI nachverarbeiten'.")
+                if "[WARN]" in (log3 or ""):
+                    st.warning("Der Lauf meldet Warnungen – bitte die "
+                               "[WARN]-Zeilen im Log unten prüfen (typisch: "
+                               "Dokument-IDs der Topic-Verteilung passen "
+                               "nicht zur DTM; die DTTI-Matrizen bleiben "
+                               "dann leer).")
                 st.code(log3 or "(keine Ausgabe)", language="text")
             except Exception as e:
                 show_error(e)
@@ -301,6 +307,9 @@ with tab_post:
                     output_dir=output_dir, top_n_docs=int(top_n_docs),
                     top_k_topics=int(top_k_topics), max_rank=int(max_rank))
                 st.success("DTTI nachverarbeitet (s04).")
+                if "[WARN]" in (log4 or ""):
+                    st.warning("Der Lauf meldet Warnungen – bitte die "
+                               "[WARN]-Zeilen im Log unten prüfen.")
                 st.code(log4 or "(keine Ausgabe)", language="text")
             except Exception as e:
                 show_error(e)

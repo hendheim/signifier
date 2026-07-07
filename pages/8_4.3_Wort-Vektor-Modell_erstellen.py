@@ -144,6 +144,33 @@ def _count_corpus_tokens(input_dir: Path, pattern: str,
     return diag
 
 
+def _corpus_files_stamp(dirs: tuple, pattern: str) -> tuple:
+    """Fingerabdruck (Pfad, mtime) aller Kandidatendateien – Cache-Key."""
+    stamp = []
+    for d in dirs:
+        if d is not None and d.exists():
+            for f in sorted(d.rglob(pattern)):
+                try:
+                    stamp.append((str(f), f.stat().st_mtime_ns))
+                except OSError:
+                    pass
+    return tuple(stamp)
+
+
+@st.cache_data(show_spinner="Zähle Tokens der Korpus-Grundlage …")
+def _count_corpus_tokens_cached(input_dir_str: str, pattern: str,
+                                extra_dirs_str: tuple, stamp: tuple) -> dict:
+    """Gecachte Tokenzählung.
+
+    Ohne Cache lief die Zählung (CSV-Read + Split über das gesamte Korpus)
+    bei JEDER Widget-Interaktion dieser Seite neu – bei großen Korpora
+    mehrere Sekunden pro Klick. ``stamp`` (Datei-mtimes) invalidiert den
+    Cache automatisch nach einem Pipeline-Lauf.
+    """
+    extra = tuple(Path(e) for e in extra_dirs_str if e)
+    return _count_corpus_tokens(Path(input_dir_str), pattern, extra)
+
+
 def _parse_pairs(text: str):
     """Parst Zeilen 'w1, w2, score' in eine Liste (w1, w2, float(score))."""
     pairs = []
@@ -222,7 +249,10 @@ except Exception:
 diag = {"tokens": 0, "docs": 0, "file": "", "sep": "", "content_col": None,
         "searched": [], "n_files": 0}
 if input_dir is not None:
-    diag = _count_corpus_tokens(input_dir, pattern, extra_dirs=(output_dir,))
+    _stamp = _corpus_files_stamp((input_dir, output_dir), pattern)
+    diag = _count_corpus_tokens_cached(
+        str(input_dir), pattern,
+        (str(output_dir) if output_dir is not None else "",), _stamp)
 tokens, docs, fname = diag["tokens"], diag["docs"], diag["file"]
 suggested = _suggest_w2v_params(tokens)
 cat = str(suggested.get("_category", "?"))

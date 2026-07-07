@@ -83,10 +83,16 @@ def format_metadata_row(row: pd.Series) -> str:
 
 
 def format_metadata(doc_id: str, df_meta: pd.DataFrame) -> str:
-    doc_id = str(doc_id)
-    if doc_id not in df_meta.index:
-        return doc_id  # Fallback: nur ID
-    row = df_meta.loc[doc_id]
+    doc_id = str(doc_id).strip()
+    key = doc_id
+    if key not in df_meta.index:
+        # Toleranter Fallback wie in tt_s02: '.txt'-Endung auf einer Seite.
+        alt = key[:-4] if key.lower().endswith(".txt") else key + ".txt"
+        if alt in df_meta.index:
+            key = alt
+        else:
+            return doc_id  # Fallback: nur ID
+    row = df_meta.loc[key]
     return format_metadata_row(row)
 
 

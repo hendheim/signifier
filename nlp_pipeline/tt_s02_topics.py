@@ -35,11 +35,57 @@ Beispielaufruf:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 import pandas as pd
+
+
+def _win_long_path(path: Path) -> str:
+    """Windows-Extended-Length-Pfad (\\\\?\\…) für absolute Pfade > 260 Zeichen."""
+    ap = os.path.abspath(str(path))
+    if os.name == "nt" and not ap.startswith("\\\\?\\"):
+        ap = "\\\\?\\" + ap
+    return ap
+
+
+def _safe_to_csv(df: pd.DataFrame, path: Path, **kwargs) -> None:
+    """Schreibt eine CSV robust und selbst-diagnostizierend.
+
+    1) legt den Zielordner an,
+    2) schreibt normal,
+    3) scheitert das an einem OS-Fehler (u. a. Windows-260-Zeichen-Grenze
+       oder Sync-Clients wie OneDrive), wird der Extended-Length-Pfad
+       versucht,
+    4) bleibt es dabei, wird ein Fehler mit vollem Pfad, Pfadlänge,
+       Ordner-Existenz und Arbeitsverzeichnis geworfen – damit die Ursache
+       im Log sichtbar ist, statt nur '[Errno 2] No such file or directory'.
+    """
+    path = Path(path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        df.to_csv(path, **kwargs)
+        return
+    except OSError as e:
+        try:
+            df.to_csv(_win_long_path(path), **kwargs)
+            print(f"[INFO] '{path.name}' via Langpfad-Fallback geschrieben "
+                  "(Pfad überschritt die Windows-260-Zeichen-Grenze).")
+            return
+        except OSError:
+            pass
+        full = os.path.abspath(str(path))
+        raise OSError(
+            f"Konnte '{path.name}' nicht schreiben "
+            f"([Errno {e.errno}] {e.strerror}). Voller Pfad "
+            f"({len(full)} Zeichen): {full} · Zielordner existiert: "
+            f"{path.parent.exists()} · Arbeitsverzeichnis: {os.getcwd()}"
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -271,16 +317,35 @@ def load_metadata(metadata_file: Path, sep: str = "auto") -> pd.DataFrame:
     return df_meta
 
 
+def resolve_meta_id(doc_id: str, df_meta: pd.DataFrame) -> Optional[str]:
+    """Findet die passende Metadaten-ID zu einer Dokument-ID.
+
+    Toleriert die häufigsten Abweichungen zwischen Topic-Verteilung und
+    Metadaten: umgebende Leerzeichen sowie eine '.txt'-Endung auf einer
+    der beiden Seiten. Gibt die Index-ID oder None zurück.
+    """
+    doc_id = str(doc_id).strip()
+    if not doc_id:
+        return None
+    if doc_id in df_meta.index:
+        return doc_id
+    alt = (doc_id[:-4] if doc_id.lower().endswith(".txt")
+           else doc_id + ".txt")
+    if alt in df_meta.index:
+        return alt
+    return None
+
+
 def format_metadata_entry(doc_id: str, df_meta: pd.DataFrame) -> str:
     """
     Erzeugt einen formatierten Metadaten-String für eine gegebene Dokument-ID.
     Fallback: Wenn ID nicht gefunden wird, wird die Original-ID zurückgegeben.
     """
-    doc_id = str(doc_id)
-    if not doc_id or doc_id not in df_meta.index:
-        return doc_id
+    key = resolve_meta_id(doc_id, df_meta)
+    if key is None:
+        return str(doc_id)
 
-    row = df_meta.loc[doc_id]
+    row = df_meta.loc[key]
     parts: List[str] = []
 
     if "author_surname" in row.index and pd.notna(row["author_surname"]):
@@ -327,43 +392,92 @@ def map_topdocs_to_metadata(
 
 def extract_year_from_text(text: str) -> Optional[int]:
     """
-    Extrahiert ein Jahr (1700–1999) aus einem Textstring mittels Regex.
+    Extrahiert ein Jahr (1600–2099) aus einem Textstring mittels Regex.
     Gibt das Jahr als int zurück oder None.
     """
     match = re.search(r"(1[6-9]|20)\d{2}", str(text))
     return int(match.group()) if match else None
 
 
-def build_year_topic_matrix_from_mapped(
-    mapped_df: pd.DataFrame,
-) -> pd.DataFrame:
+# ---------------------------------------------------------------------------
+# Direkte ID → Jahr-Zuordnung (robust, unabhängig vom Metadaten-String)
+# ---------------------------------------------------------------------------
+
+def meta_year_series(df_meta: pd.DataFrame) -> Optional[pd.Series]:
+    """Gibt die Jahresspalte der Metadaten zurück (flexibel, priorisiert).
+
+    Reihenfolge wie in ``format_metadata_entry`` (year_first vor year),
+    zusätzlich jahr/Jahr/date/datum – damit auch Korpora mit abweichender
+    Feldbenennung eine Jahreszuordnung erhalten.
     """
-    Nimmt eine Matrix mit gemappten Metadaten-Strings (Topdocs) und erzeugt
-    eine Jahr × Topic-Matrix (Texte als kommaseparierte Strings).
+    for col in ("year_first", "year", "jahr", "Jahr", "date", "Date",
+                "datum", "Datum"):
+        if col in df_meta.columns:
+            return df_meta[col]
+    return None
+
+
+def build_id_year_map(df_meta: pd.DataFrame) -> Dict[str, int]:
+    """Ordnet jeder Dokument-ID (Metadaten-Index) direkt ein Jahr zu.
+
+    Das Jahr wird aus der flexibel bestimmten Jahresspalte gelesen (robust
+    gegen '1850', '1850.0', '1850-03-14' …). Dadurch hängt die Jahres-
+    zuordnung NICHT mehr davon ab, ob das Jahr in den formatierten
+    Metadaten-String gelangt – genau das war die Ursache dafür, dass
+    ``*_year_topic_matrix.csv`` (und die davon abhängigen Dateien) fehlten.
+    """
+    series = meta_year_series(df_meta)
+    if series is None:
+        return {}
+    id_year: Dict[str, int] = {}
+    for idx, val in series.items():
+        if pd.isna(val):
+            continue
+        year = extract_year_from_text(str(val))
+        if year is not None:
+            id_year[str(idx)] = year
+    return id_year
+
+
+def build_year_topic_matrix(
+    topdocs_ids: pd.DataFrame,
+    topdocs_mapped: pd.DataFrame,
+    id_to_year: Dict[str, int],
+    df_meta: pd.DataFrame,
+) -> pd.DataFrame:
+    """Jahr × Topic-Matrix – Jahr per ID→Jahresspalte statt Regex am String.
+
+    Für jede Topic-Spalte werden Dokument-ID (aus ``topdocs_ids``) und der
+    zugehörige Metadaten-String (aus ``topdocs_mapped``) parallel
+    durchlaufen: Das Jahr kommt aus ``id_to_year`` (mit '.txt'-toleranter
+    ID-Auflösung), in der Zelle steht weiterhin der Metadaten-String
+    (Fallback: die ID).
     """
     data: Dict[Tuple[int, str], List[str]] = {}
-
-    for topic in mapped_df.columns:
-        for doc in mapped_df[topic].dropna():
-            if not doc:
+    topics = list(topdocs_ids.columns)
+    for topic in topics:
+        ids = topdocs_ids[topic].tolist()
+        strings = (topdocs_mapped[topic].tolist()
+                   if topic in topdocs_mapped.columns else ids)
+        for did, s in zip(ids, strings):
+            did = str(did).strip()
+            if not did:
                 continue
-            year = extract_year_from_text(doc)
+            key = resolve_meta_id(did, df_meta)
+            year = id_to_year.get(str(key)) if key is not None else None
             if year is None:
                 continue
-            data.setdefault((year, topic), []).append(str(doc))
+            cell = str(s).strip() if s is not None and str(s).strip() else did
+            data.setdefault((year, topic), []).append(cell)
 
     if not data:
         return pd.DataFrame()
 
     years = sorted({y for (y, _) in data.keys()})
-    topics = mapped_df.columns.tolist()
     reshaped_df = pd.DataFrame(index=years, columns=topics)
-
     for (year, topic), docs in data.items():
         reshaped_df.at[year, topic] = ", ".join(docs)
-
-    reshaped_df = reshaped_df.fillna("")
-    return reshaped_df
+    return reshaped_df.fillna("")
 
 
 # ---------------------------------------------------------------------------
@@ -415,16 +529,28 @@ def build_document_topic_count_matrix(
 
 def build_topic_counts_per_year(
     doc_topic_count_df: pd.DataFrame,
+    string_to_year: Optional[Dict[str, int]] = None,
 ) -> pd.DataFrame:
     """
     Erzeugt eine numerische Matrix: Jahr × Topic = Anzahl Dokumente.
+
+    ``string_to_year`` (Metadaten-String → Jahr, aus der direkten
+    ID→Jahr-Zuordnung) hat Vorrang; nur wenn ein Dokument dort fehlt, wird
+    als Fallback das Jahr aus dem String geregext.
     """
     df = doc_topic_count_df.copy()
 
     if "Dokument" not in df.columns:
         raise ValueError("Erwarte Spalte 'Dokument' in der Dokument-Topic-Count-Matrix.")
 
-    df["Jahr"] = df["Dokument"].apply(extract_year_from_text)
+    if string_to_year:
+        keys = df["Dokument"].astype(str).str.strip()
+        df["Jahr"] = keys.map(string_to_year)
+        miss = df["Jahr"].isna()
+        if miss.any():
+            df.loc[miss, "Jahr"] = df.loc[miss, "Dokument"].apply(extract_year_from_text)
+    else:
+        df["Jahr"] = df["Dokument"].apply(extract_year_from_text)
     df = df.dropna(subset=["Jahr"])
     df["Jahr"] = df["Jahr"].astype(int)
 
@@ -441,12 +567,16 @@ def build_topic_counts_per_year(
 
 def build_year_document_ranking(
     doc_topic_count_df: pd.DataFrame,
+    string_to_year: Optional[Dict[str, int]] = None,
 ) -> pd.DataFrame:
     """
     Erzeugt eine Tabelle:
 
         - Zeilen = Jahre
         - Spalten = 'Anzahl', 'Dokument 1', 'Dokument 2', ...
+
+    ``string_to_year`` (Metadaten-String → Jahr) hat Vorrang; Fallback ist
+    das Regex-Jahr aus dem String.
     """
     if "Dokument" not in doc_topic_count_df.columns:
         raise ValueError("Erwarte Spalte 'Dokument' in der Dokument-Topic-Count-Matrix.")
@@ -460,7 +590,11 @@ def build_year_document_ranking(
     for text in docs_in_order:
         if text in seen:
             continue
-        year = extract_year_from_text(text)
+        year = None
+        if string_to_year:
+            year = string_to_year.get(text.strip())
+        if year is None:
+            year = extract_year_from_text(text)
         if year is not None:
             jahres_map[year].append(text)
             seen.add(text)
@@ -653,6 +787,27 @@ def build_mapped_topdocs_subset_topk(
 # main()
 # ---------------------------------------------------------------------------
 
+def _ensure_output_file(path: Path, columns: List[str],
+                        index_label: Optional[str] = None) -> None:
+    """Schreibt eine leere, aber gültige CSV mit Kopfzeile, falls die Datei
+    nicht existiert.
+
+    Damit entstehen ALLE angekündigten Ausgabedateien auch dann, wenn keine
+    Jahre/Metadaten zugeordnet werden konnten – nachgelagerte Seiten laufen
+    dann auf leere Tabellen statt auf 'No such file or directory'.
+    """
+    if path.exists():
+        return
+    empty = pd.DataFrame(columns=columns)
+    if index_label:
+        empty.index.name = index_label
+        _safe_to_csv(empty, path, encoding="utf-8", index_label=index_label)
+    else:
+        _safe_to_csv(empty, path, index=False, encoding="utf-8")
+    print(f"[WARN] {path.name}: ohne Inhalt erzeugt (keine zuordenbaren "
+          "Jahre/Metadaten – siehe Warnungen oben).")
+
+
 def main() -> None:
     args = parse_args()
 
@@ -682,12 +837,12 @@ def main() -> None:
 
     # 2) Topic-Ranking
     topic_stats = compute_topic_stats(df)
-    topic_stats.to_csv(rank_file, index=False, encoding="utf-8")
+    _safe_to_csv(topic_stats, rank_file, index=False, encoding="utf-8")
     print(f"[OK] Topic-Ranking gespeichert in: {rank_file}")
 
     # 3) Top-N-Dokumente pro Topic
     topdocs_df = compute_top_docs_per_topic(df, top_n=args.top_n_docs)
-    topdocs_df.to_csv(topdocs_file, index=False, encoding="utf-8")
+    _safe_to_csv(topdocs_df, topdocs_file, index=False, encoding="utf-8")
     print(f"[OK] Top-{args.top_n_docs}-Dokumente pro Topic gespeichert in: {topdocs_file}")
 
     # 4) Metadaten-abhängige Schritte
@@ -708,45 +863,97 @@ def main() -> None:
             df_meta["year"] = df_meta[year_col]
             print(f"[INFO] Jahresspalte '{year_col}' wird als Jahr verwendet.")
 
+        # Direkte ID→Jahr-Zuordnung: löst die Jahresangabe unabhängig vom
+        # formatierten Metadaten-String (der das Jahr nicht immer enthält).
+        id_to_year = build_id_year_map(df_meta)
+        _year_series = meta_year_series(df_meta)
+        if _year_series is None:
+            print("[WARN] Keine Jahresspalte in den Metadaten gefunden "
+                  "(gesucht: year_first, year, jahr, Jahr, date, datum). "
+                  "Ohne Jahr entstehen die jahr-basierten Dateien nur leer.")
+
+        # Diagnose: Wie viele Dokument-IDs der Topic-Verteilung finden sich
+        # in den Metadaten – und wie viele haben ein zuordenbares Jahr?
+        _ids = [str(i) for i in pd.unique(topdocs_df.values.ravel())
+                if pd.notna(i) and str(i).strip()]
+        _keys = [resolve_meta_id(i, df_meta) for i in _ids]
+        _hits = sum(1 for k in _keys if k is not None)
+        _year_hits = sum(1 for k in _keys
+                         if k is not None and str(k) in id_to_year)
+        print(f"[INFO] Metadaten-Mapping: {_hits} von {len(_ids)} "
+              f"Dokument-IDs in den Metadaten gefunden; davon {_year_hits} "
+              "mit zuordenbarem Jahr.")
+        if _ids and _hits == 0:
+            print("[WARN] KEINE Dokument-ID der Topic-Verteilung passt zu den "
+                  "Metadaten! Bitte ID-Spalte der Metadaten und die "
+                  "Dokument-IDs der Distribution vergleichen (z. B. "
+                  "'.txt'-Endung, führende/abschließende Leerzeichen). "
+                  "Alle jahr-/metadatenbasierten Ausgaben bleiben leer.")
+        elif _ids and _year_hits == 0:
+            print("[WARN] Zwar wurden IDs zugeordnet, aber KEINE besitzt ein "
+                  "zuordenbares Jahr – die jahr-basierten Dateien bleiben "
+                  "leer. Bitte die Werte der Jahresspalte prüfen.")
+
         # 4a) IDs → Metadaten-Strings
         topdocs_mapped = map_topdocs_to_metadata(topdocs_df, df_meta)
-        topdocs_mapped.to_csv(mapped_file, index=False, encoding="utf-8")
+        _safe_to_csv(topdocs_mapped, mapped_file, index=False, encoding="utf-8")
         print(f"[OK] Gemappte Top-Dokumente gespeichert in: {mapped_file}")
 
-        # 4b) Jahr × Topic-Matrix (Texte in Zellen)
-        year_topic_df = build_year_topic_matrix_from_mapped(topdocs_mapped)
+        # Metadaten-String → Jahr (aus der direkten ID→Jahr-Zuordnung), damit
+        # auch die count-basierten Ausgaben ohne Regex-am-String auskommen.
+        string_to_year: Dict[str, int] = {}
+        for _topic in topdocs_df.columns:
+            _tids = topdocs_df[_topic].astype(str).tolist()
+            _tstr = (topdocs_mapped[_topic].astype(str).tolist()
+                     if _topic in topdocs_mapped.columns else _tids)
+            for _did, _s in zip(_tids, _tstr):
+                _s = _s.strip()
+                if not _s:
+                    continue
+                _k = resolve_meta_id(_did.strip(), df_meta)
+                _y = id_to_year.get(str(_k)) if _k is not None else None
+                if _y is not None:
+                    string_to_year.setdefault(_s, _y)
+
+        # 4b) Jahr × Topic-Matrix (Texte in Zellen) – Jahr per ID→Jahresspalte
+        year_topic_df = build_year_topic_matrix(
+            topdocs_df, topdocs_mapped, id_to_year, df_meta)
         if not year_topic_df.empty:
-            year_topic_df.to_csv(year_topic_file, encoding="utf-8", index_label="Jahr")
+            _safe_to_csv(year_topic_df, year_topic_file, encoding="utf-8", index_label="Jahr")
             print(f"[OK] Jahr-Topic-Matrix gespeichert in: {year_topic_file}")
         else:
-            print("[WARN] Keine Jahre in Metadaten-Strings gefunden – keine Jahr-Topic-Matrix erzeugt.")
+            print("[WARN] Keine zuordenbaren Jahre – folgende Dateien werden "
+                  "leer (nur Kopfzeile) erzeugt: "
+                  f"{year_topic_file.name}, {topic_counts_per_year_file.name}, "
+                  f"{year_document_map_file.name}, {year_value_file.name}, "
+                  f"{text_topic_value_file.name}. Ursache meist: Jahresspalte "
+                  "fehlt/unerkannt oder Dokument-IDs passen nicht zu den "
+                  "Metadaten (siehe [INFO] Metadaten-Mapping oben).")
 
         # 4c) Dokument-Topic-Count-Matrix
         doc_topic_count_df = build_document_topic_count_matrix(topdocs_mapped)
         if not doc_topic_count_df.empty:
-            doc_topic_count_df.to_csv(doc_topic_count_file, index=False, encoding="utf-8")
+            _safe_to_csv(doc_topic_count_df, doc_topic_count_file, index=False, encoding="utf-8")
             print(f"[OK] Dokument-Topic-Count-Matrix gespeichert in: {doc_topic_count_file}")
 
             # 4d) Topic-Counts pro Jahr
-            topic_counts_per_year_df = build_topic_counts_per_year(doc_topic_count_df)
+            topic_counts_per_year_df = build_topic_counts_per_year(
+                doc_topic_count_df, string_to_year=string_to_year)
             if not topic_counts_per_year_df.empty:
-                topic_counts_per_year_df.to_csv(
-                    topic_counts_per_year_file,
-                    encoding="utf-8",
-                    index_label="Jahr",
-                )
+                _safe_to_csv(
+                    topic_counts_per_year_df, topic_counts_per_year_file,
+                    encoding="utf-8", index_label="Jahr")
                 print(f"[OK] Topic-Counts pro Jahr gespeichert in: {topic_counts_per_year_file}")
             else:
                 print("[WARN] Keine gültigen Jahresangaben für Topic-Counts-pro-Jahr gefunden.")
 
             # 4e) Jahr → Liste der wichtigsten Texte
-            year_document_df = build_year_document_ranking(doc_topic_count_df)
+            year_document_df = build_year_document_ranking(
+                doc_topic_count_df, string_to_year=string_to_year)
             if not year_document_df.empty:
-                year_document_df.to_csv(
-                    year_document_map_file,
-                    encoding="utf-8",
-                    index_label="Jahr",
-                )
+                _safe_to_csv(
+                    year_document_df, year_document_map_file,
+                    encoding="utf-8", index_label="Jahr")
                 print(f"[OK] Jahr-Dokument-Matrix gespeichert in: {year_document_map_file}")
             else:
                 print("[WARN] Keine gültigen Jahresangaben für Jahr-Dokument-Matrix gefunden.")
@@ -765,11 +972,9 @@ def main() -> None:
                 # 4f.1) value_per_text_topic (beschränkt)
                 value_per_text_topic_df = build_value_per_text_and_topic(top10_sub)
                 if not value_per_text_topic_df.empty:
-                    value_per_text_topic_df.to_csv(
-                        text_topic_value_file,
-                        index=False,
-                        encoding="utf-8",
-                    )
+                    _safe_to_csv(
+                        value_per_text_topic_df, text_topic_value_file,
+                        index=False, encoding="utf-8")
                     print(f"[OK] (Top-10 / Top-30) Text-Topic-Werte gespeichert in: {text_topic_value_file}")
                 else:
                     print("[WARN] Keine rangbasierten Text-Topic-Werte (Top-10/Top-30) erzeugt.")
@@ -777,12 +982,27 @@ def main() -> None:
                 # 4f.2) year_value (beschränkt)
                 year_value_df = build_year_values_from_rank(top10_sub, year_document_df)
                 if not year_value_df.empty:
-                    year_value_df.to_csv(year_value_file, index=False, encoding="utf-8")
+                    _safe_to_csv(year_value_df, year_value_file, index=False, encoding="utf-8")
                     print(f"[OK] (Top-10 / Top-30) Jahreswerte gespeichert in: {year_value_file}")
                 else:
                     print("[WARN] Keine rangbasierten Jahreswerte (Top-10/Top-30) erzeugt.")
             else:
                 print("[WARN] Kein gültiges Subset für Top-10-Topics/Top-30-Ränge oder keine Jahr-Dokument-Matrix verfügbar.")
+
+        # Garantie: Alle angekündigten Ausgabedateien existieren – notfalls
+        # leer mit Kopfzeile. So können Folgeseiten nicht mehr an fehlenden
+        # Dateien scheitern; leere Tabellen zeigen das Problem sichtbar an.
+        topic_cols = [str(c) for c in topdocs_df.columns]
+        _ensure_output_file(year_topic_file, topic_cols, index_label="Jahr")
+        _ensure_output_file(doc_topic_count_file,
+                            ["Dokument", "Anzahl Topics"] + topic_cols)
+        _ensure_output_file(topic_counts_per_year_file, topic_cols,
+                            index_label="Jahr")
+        _ensure_output_file(year_document_map_file, ["Anzahl"],
+                            index_label="Jahr")
+        _ensure_output_file(year_value_file, ["Jahr", "Wert"])
+        _ensure_output_file(text_topic_value_file,
+                            ["Text", "SummeWert"] + topic_cols)
 
 
 if __name__ == "__main__":

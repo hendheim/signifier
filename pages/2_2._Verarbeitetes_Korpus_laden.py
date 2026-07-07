@@ -3,7 +3,7 @@ from pathlib import Path
 import streamlit as st
 
 from explorer_core.data_store import PATH_LABELS, PATH_CATEGORIES
-from ui_helpers import get_store, get_models, get_schema
+from ui_helpers import get_store, get_models, get_schema, timed
 
 store = get_store()
 schema = get_schema()
@@ -198,6 +198,52 @@ if st.button("Alle Daten laden & prüfen", type="primary"):
         )
     except Exception:
         pass
+
+# ----------------------------------------------------------------------------
+# 4) Ergebnisse herunterladen (Statistiken + gespeicherte Bilder)
+# ----------------------------------------------------------------------------
+st.header("4 · Ergebnisse herunterladen")
+st.caption(
+    "Bündelt alle Statistik-CSVs sowie die auf den Analyse-Seiten erzeugten "
+    "Bilder samt Hyperparameter-Dateien (`output/statistics/`, inkl. "
+    "`bilder/`) in eine ZIP-Datei."
+)
+
+_stats_dir = Path(store.project_root) / "output" / "statistics"
+if st.button("📦 ZIP zusammenstellen", key="stats_zip_btn"):
+    import io
+    import zipfile
+    try:
+        with timed("ZIP erstellen"):
+            buf = io.BytesIO()
+            n_files = 0
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                if _stats_dir.exists():
+                    for f in sorted(_stats_dir.rglob("*")):
+                        if f.is_file():
+                            zf.write(f, arcname=str(f.relative_to(_stats_dir)))
+                            n_files += 1
+            st.session_state["stats_zip"] = buf.getvalue()
+            st.session_state["stats_zip_n"] = n_files
+    except Exception as e:
+        st.error(f"⚠️ ZIP konnte nicht erstellt werden: {e}")
+
+if "stats_zip" in st.session_state:
+    _n = st.session_state["stats_zip_n"]
+    _data = st.session_state["stats_zip"]
+    if _n == 0:
+        st.info("Keine Dateien in `output/statistics/` gefunden – erst die "
+                "Token-Statistik (Seite 'Token-Statistik erstellen') ausführen "
+                "bzw. auf den Analyse-Seiten Bilder erzeugen.")
+    else:
+        st.download_button(
+            f"⬇️ Statistiken + Bilder herunterladen "
+            f"({_n} Dateien, {len(_data) / 1e6:.1f} MB)",
+            _data,
+            file_name="signifier_statistik.zip",
+            mime="application/zip",
+            key="dl_stats_zip",
+        )
 
 st.divider()
 st.caption(

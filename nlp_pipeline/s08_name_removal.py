@@ -20,8 +20,9 @@ der "-n"-Verarbeitung) sowie die bereinigten Stufen unter
 ``output/processed_corpus-n/`` (gleiche Dateinamen, Ordner mit Suffix ``-n``).
 ``derive_stop_n_cfg`` leitet daraus eine Pipeline-Konfiguration ab, die die
 Folgeschritte (Vokabular, Statistik, POS, DTM/TF-IDF, Kosinus, Intervalle,
-TF-IDF-Rang, Word2Vec) auf die "-n"-Daten anwendet und die Ausgaben in
-"-n"-Ordner schreibt.
+TF-IDF-Rang) auf die "-n"-Daten anwendet und die Ausgaben in "-n"-Ordner
+schreibt. Das Word2Vec-Modell (Schritt 10) entsteht – wie bei der normalen
+Verarbeitung – separat über die Seite "Wort-Vektor-Modell erstellen".
 """
 
 from __future__ import annotations
@@ -390,8 +391,10 @@ _PATH_FIELDS: Dict[str, List[str]] = {
     "step10_s07_word_vector_model": ["input_dir", "output_dir"],
 }
 # Schritte 1 (Vorverarbeitung) und 5 (Gensim) entfallen: corpus_stop-n und
-# corpus_gen-n entstehen direkt durch die Namenstilgung.
-STOP_N_STEPS = ["2", "4", "6", "7", "8", "9", "10"]
+# corpus_gen-n entstehen direkt durch die Namenstilgung. Schritt 10
+# (Word2Vec) läuft – wie bei der normalen Verarbeitung – nicht mehr
+# automatisch mit, sondern über die Seite "Wort-Vektor-Modell erstellen".
+STOP_N_STEPS = ["2", "4", "6", "7", "8", "9"]
 
 
 def derive_stop_n_cfg(cfg: dict) -> dict:

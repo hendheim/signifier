@@ -139,6 +139,9 @@ def _scatter_subtab(method: str, facet_options, label_meta_cols):
                 int(cluster_k) if do_cluster else None,
                 cluster_method, tuple(sorted(hp.items())))
             st.session_state[f"tx_df_{method}"] = df
+            # Datenversion hochzählen → Figur-Cache unten invalidieren
+            st.session_state[f"tx_df_v_{method}"] = \
+                st.session_state.get(f"tx_df_v_{method}", 0) + 1
         except Exception as e:
             show_error(e)
 
@@ -175,9 +178,20 @@ def _scatter_subtab(method: str, facet_options, label_meta_cols):
                     key=f"tx_hp_{method}")
             else:
                 label_col = label_by if label_by != "(keine)" else None
-                fig = text_scatter_matplotlib(
-                    df, color_col, marker_size=int(marker_size),
-                    label_column=label_col)
+                # Figur nur neu bauen, wenn Daten oder Darstellungsparameter
+                # sich geändert haben – sonst gecachte Figur (inkl. bereits
+                # gerendertem PNG) wiederverwenden. Reruns durch andere
+                # Widgets kosten damit kein savefig (0,4–1,5 s) mehr.
+                sig = (st.session_state.get(f"tx_df_v_{method}", 0),
+                       color_col, int(marker_size), label_col)
+                cached = st.session_state.get(f"tx_figcache_{method}")
+                if cached is None or cached[0] != sig:
+                    fig = text_scatter_matplotlib(
+                        df, color_col, marker_size=int(marker_size),
+                        label_column=label_col)
+                    st.session_state[f"tx_figcache_{method}"] = (sig, fig)
+                else:
+                    fig = cached[1]
                 save_figure(fig, base, params=params, key=f"tx_fig_{method}")
 
             with st.expander("Datentabelle (Koordinaten + Metadaten)"):

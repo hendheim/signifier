@@ -206,6 +206,11 @@ class DataStore:
             key: self.project_root / rel for key, rel in DEFAULT_PATHS.items()
         }
         self._cache: Dict[str, object] = {}
+        # Optionaler injizierter CSV-Reader (path, delimiter, **kwargs) -> DataFrame.
+        # Das Dashboard hängt hier einen st.cache_data-Wrapper ein, damit
+        # Reads Browser-Reloads und Sessions überleben; ohne Reader wird
+        # direkt read_csv_auto benutzt (Notebooks/Skripte unverändert).
+        self.reader = None
 
     # ------------------------------------------------------------------
     # Verwaltung
@@ -371,7 +376,7 @@ class DataStore:
                 return matches[0]
         return None
 
-    def _read(self, key: str, **kwargs) -> pd.DataFrame:
+    def _resolve_path(self, key: str) -> Path:
         path = self.paths[key]
         if not Path(path).exists():
             alt = self._resolve_glob(key)
@@ -381,7 +386,37 @@ class DataStore:
             else:
                 raise FileNotFoundError(
                     f"{PATH_LABELS.get(key, key)} nicht gefunden: {path}")
+        return Path(path)
+
+    def _read(self, key: str, **kwargs) -> pd.DataFrame:
+        path = self._resolve_path(key)
+        if self.reader is not None:
+            return self.reader(path, self.schema.delimiter, **kwargs)
         return read_csv_auto(path, delimiter=self.schema.delimiter, **kwargs)
+
+    def _read_corpus_raw(self) -> pd.DataFrame:
+        """Korpus-CSV lesen, mit Parquet-Sidecar-Cache für große Dateien.
+
+        Beim ersten Laden wird neben der CSV eine ``<name>.parquet``
+        abgelegt; solange die CSV unverändert ist, laden Folge-Starts das
+        deutlich schnellere Parquet (bei ~45 Mio. Tokens Sekunden statt
+        Minuten). Schlägt Parquet fehl (z. B. pyarrow fehlt), bleibt der
+        CSV-Weg vollständig funktionsfähig.
+        """
+        path = self._resolve_path("corpus")
+        sidecar = path.with_name(path.name + ".parquet")
+        try:
+            if (sidecar.exists()
+                    and sidecar.stat().st_mtime_ns >= path.stat().st_mtime_ns):
+                return pd.read_parquet(sidecar)
+        except Exception:
+            pass
+        df = read_csv_auto(path, delimiter=self.schema.delimiter)
+        try:
+            df.to_parquet(sidecar, index=False)
+        except Exception:
+            pass
+        return df
 
     def load_metadata(self) -> pd.DataFrame:
         """Metadaten laden + ID/Jahr normalisieren + im Schema registrieren."""
@@ -405,7 +440,7 @@ class DataStore:
     def load_corpus(self) -> pd.DataFrame:
         if "corpus" in self._cache:
             return self._cache["corpus"]  # type: ignore[return-value]
-        df = self._read("corpus")
+        df = self._read_corpus_raw()
         content_col = self.schema.find_content_column(df)
         df["text"] = df[content_col].fillna("").astype(str) if content_col else ""
         df = self.schema.ensure_doc_id(df)

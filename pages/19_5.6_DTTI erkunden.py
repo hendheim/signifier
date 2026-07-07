@@ -35,6 +35,23 @@ st.caption("Beziehungen zwischen Termset-Tags und Topic-Modell")
 store = get_store()
 schema = get_schema()
 
+
+def _require_data(df, label: str, quelle: str):
+    """Leere Eingabedatei → verständliche Meldung statt Folge-Fehler.
+
+    Seit die Nachverarbeitung alle Ausgabedateien garantiert erzeugt
+    (notfalls leer mit Kopfzeile), zeigt eine leere Tabelle an, dass dort
+    keine Jahre/Metadaten zugeordnet werden konnten.
+    """
+    if df is None or df.empty:
+        raise ValueError(
+            f"{label} ist leer. Vermutlich konnten bei der Nachverarbeitung "
+            f"keine Jahre/Metadaten zugeordnet werden – bitte auf der Seite "
+            f"{quelle} den Lauf wiederholen und die [INFO]-/[WARN]-Zeilen "
+            "im Log prüfen (Dokument-IDs vs. Metadaten, Jahresspalte).")
+    return df
+
+
 tab_bubble, tab_stack, tab_poly, tab_tok, tab_rank = st.tabs(
     ["TT-Relevanz (Bubbles)", "Topics/Jahr (Stacked)",
      "TT-Texte/Jahr (Polynom)", "Tokens vs. Topics", "TT-Texte-Rang"]
@@ -82,7 +99,10 @@ with tab_stack:
     if st.button("Diagramm zeichnen", key="stk_btn", type="primary"):
         try:
             fig = stacked_topics_per_year(
-                store.load_counts_per_year(), store.load_ranks(),
+                _require_data(store.load_counts_per_year(),
+                              "Die Topic-Counts-pro-Jahr-Datei",
+                              "„DTTI erstellen“ (Tab ‚DTTI nachverarbeiten‘)"),
+                store.load_ranks(),
                 year_range=parse_year_range(stk_years_raw),
                 top_n=int(stk_topn))
             save_figure(fig, "topics_pro_jahr", params={
@@ -102,7 +122,10 @@ with tab_poly:
     if st.button("Trends zeichnen", key="pl_btn", type="primary"):
         try:
             fig = tt_texts_polynomial(
-                store.load_counts_per_year(), store.load_ranks(),
+                _require_data(store.load_counts_per_year(),
+                              "Die Topic-Counts-pro-Jahr-Datei",
+                              "„DTTI erstellen“ (Tab ‚DTTI nachverarbeiten‘)"),
+                store.load_ranks(),
                 degree=int(pl_degree), top_n=int(pl_topn))
             save_figure(fig, "tt_texte_polynom", params={
                 "Polynomgrad": int(pl_degree), "Top-Topics": int(pl_topn)}, key="pl")
@@ -122,7 +145,10 @@ with tab_tok:
     if st.button("Vergleich zeichnen", key="tok_btn", type="primary"):
         try:
             fig = tokens_vs_topics(
-                store.load_tokens_year(), store.load_top10_year_value(),
+                store.load_tokens_year(),
+                _require_data(store.load_top10_year_value(),
+                              "Das Topic-Ranking pro Jahr",
+                              "„Topics nachverarbeiten“"),
                 year_range=parse_year_range(tok_years_raw))
             save_figure(fig, "tokens_vs_topics", params={
                 "Jahresbereich": tok_years_raw or "alle"}, key="tok")
@@ -147,7 +173,10 @@ with tab_rank:
                 st.info("Keine Metadaten gefunden – Rangliste ohne "
                         "Metadaten-Verknüpfung.")
             df, matched = tt_texts_rank(
-                store.load_top10_value_per_text(), meta, schema,
+                _require_data(store.load_top10_value_per_text(),
+                              "Das Topic-Ranking pro Text",
+                              "„Topics nachverarbeiten“"),
+                meta, schema,
                 per_topic=int(rk_per_topic))
             if meta is not None:
                 st.caption(f"{matched} von {len(df)} Einträgen mit "

@@ -35,6 +35,26 @@ store = get_store()
 schema = get_schema()
 project_root = Path(store.project_root)
 
+
+# ---------------------------------------------------------------------------
+# Gecachte Daten-Grundlagen: Ohne Cache liefen base_doc_table (liest die
+# größte Korpus-Stufe) und stage_token_summary (liest ALLE gewählten Stufen)
+# bei JEDER Widget-Interaktion dieser Seite neu – bei großen Korpora Minuten
+# pro Klick. Der Datei-Stempel (mtime) invalidiert nach Pipeline-Läufen.
+# ---------------------------------------------------------------------------
+
+@st.cache_data(show_spinner="Lese Korpus-Stufe und zähle Tokens …")
+def _base_doc_table_cached(root_str: str, stage: str, stamp: tuple,
+                           _schema) -> "pd.DataFrame":
+    return stats.base_doc_table(Path(root_str), _schema, stage=stage)
+
+
+@st.cache_data(show_spinner="Zähle Tokens je Stufe …")
+def _stage_summary_cached(root_str: str, stages: tuple, stamp: tuple,
+                          _schema) -> "pd.DataFrame":
+    return stats.stage_token_summary(Path(root_str), list(stages), _schema)
+
+
 stop_csv = project_root / "output" / "processed_corpus" / "korpus_stop.csv"
 if not stop_csv.exists():
     st.info("Voraussetzung: `output/processed_corpus/korpus_stop.csv`. Bitte "
@@ -42,7 +62,9 @@ if not stop_csv.exists():
     st.stop()
 
 try:
-    base = stats.base_doc_table(project_root, schema, stage="min")
+    base = _base_doc_table_cached(
+        str(project_root), "min",
+        stats.stage_file_stamp(project_root, ["min"]), schema)
 except Exception as exc:
     show_error(exc)
     st.stop()
@@ -57,7 +79,9 @@ chosen_stages = [s for i, s in enumerate(avail)
                  if cols[i].checkbox(s, value=True, key=f"stage_{s}")]
 if chosen_stages:
     try:
-        tbl = stats.stage_token_summary(project_root, chosen_stages, schema)
+        tbl = _stage_summary_cached(
+            str(project_root), tuple(chosen_stages),
+            stats.stage_file_stamp(project_root, chosen_stages), schema)
         df_with_download(tbl, "tokens_je_stufe", key="stages")
     except Exception as exc:
         show_error(exc)
@@ -123,7 +147,10 @@ if st.button("💾 Statistik-CSVs speichern"):
         outdir.mkdir(parents=True, exist_ok=True)
         written = []
         if chosen_stages:
-            stats.stage_token_summary(project_root, chosen_stages, schema).to_csv(
+            _stage_summary_cached(
+                str(project_root), tuple(chosen_stages),
+                stats.stage_file_stamp(project_root, chosen_stages),
+                schema).to_csv(
                 outdir / "tokens.csv", index=False, encoding="utf-8")
             written.append("tokens.csv")
         stats.year_token_counts(base).to_csv(

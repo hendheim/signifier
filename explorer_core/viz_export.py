@@ -18,11 +18,13 @@ müssen.
 from __future__ import annotations
 
 from datetime import datetime
+from hashlib import sha1
+from pathlib import Path
 from typing import Optional, Mapping, Any
 
 import streamlit as st
 
-from ui_helpers import fig_with_download
+from ui_helpers import fig_with_download, get_store, render_fig_png
 
 
 def format_hyperparams(params: Optional[Mapping[str, Any]],
@@ -42,12 +44,37 @@ def format_hyperparams(params: Optional[Mapping[str, Any]],
     return "\n".join(lines) + "\n"
 
 
+def _persist_to_statistics(filename: str, png: bytes, txt: str) -> Optional[Path]:
+    """Legt PNG + Hyperparameter-TXT unter ``output/statistics/bilder/`` ab.
+
+    Der Dateiname enthält einen Inhalts-Hash: identische Bilder werden bei
+    Streamlit-Reruns nicht erneut geschrieben (write-once), verschiedene
+    Parameter-Varianten derselben Grafik bleiben nebeneinander erhalten.
+    Gibt den PNG-Pfad zurück (auch wenn er schon existierte); bei Fehlern
+    (z. B. Schreibschutz) still ``None`` – Anzeige/Download funktionieren
+    unabhängig davon.
+    """
+    try:
+        out_dir = (Path(get_store().project_root)
+                   / "output" / "statistics" / "bilder")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stem = f"{filename}_{sha1(png).hexdigest()[:8]}"
+        png_path = out_dir / f"{stem}.png"
+        if not png_path.exists():
+            png_path.write_bytes(png)
+            (out_dir / f"{stem}.txt").write_text(txt, encoding="utf-8")
+        return png_path
+    except Exception:
+        return None
+
+
 def save_figure(fig, filename: str,
                 params: Optional[Mapping[str, Any]] = None,
                 key: Optional[str] = None,
                 title: Optional[str] = None) -> None:
     """Wie ``fig_with_download``, gibt aber zusätzlich eine
-    Hyperparameter-``.txt`` mit gleichem Basisnamen zum Download aus.
+    Hyperparameter-``.txt`` mit gleichem Basisnamen zum Download aus und
+    legt beides dauerhaft unter ``output/statistics/bilder/`` ab.
 
     Parameters
     ----------
@@ -70,3 +97,7 @@ def save_figure(fig, filename: str,
         mime="text/plain",
         key=(f"{key}_hp" if key else None),
     )
+    saved = _persist_to_statistics(filename, render_fig_png(fig), txt)
+    if saved is not None:
+        st.caption(f"💾 Gespeichert: `output/statistics/bilder/{saved.name}` "
+                   "(+ gleichnamige .txt)")

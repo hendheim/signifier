@@ -16,17 +16,34 @@ nur um die "Verkabelung" mit Streamlit.
 from __future__ import annotations
 
 import io
+import logging
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
-from explorer_core import MetadataSchema, DataStore, ModelStore, detect_project_root
+from explorer_core import (MetadataSchema, DataStore, ModelStore,
+                           detect_project_root, read_csv_auto)
+from explorer_core.token_index import TokenIndex
 
 # Basisordner der App (= Ordner, in dem app.py liegt)
 APP_DIR = Path(__file__).resolve().parent
 SCHEMA_PATH = APP_DIR / "config" / "metadata_schema.yaml"
+
+_perf_log = logging.getLogger("signifier.perf")
+
+
+@contextmanager
+def timed(label: str):
+    """Dauer eines Blocks messen: Log + dezente Anzeige unter dem Ergebnis."""
+    t0 = time.perf_counter()
+    yield
+    dt = time.perf_counter() - t0
+    _perf_log.info("%s: %.2fs", label, dt)
+    st.caption(f"⏱ {label}: {dt:.2f} s")
 
 
 def get_schema() -> MetadataSchema:
@@ -45,12 +62,52 @@ def reload_schema() -> MetadataSchema:
     return st.session_state["schema"]
 
 
+@st.cache_data(show_spinner="Lade Daten …")
+def _cached_csv(path_str: str, mtime_ns: int, delimiter: str,
+                **kwargs) -> pd.DataFrame:
+    """Prozessweiter CSV-Cache: überlebt Browser-Reloads und neue Sessions.
+
+    ``mtime_ns`` ist Teil des Cache-Keys – nach einem Pipeline-Lauf wird
+    die geänderte Datei automatisch neu gelesen.
+    """
+    return read_csv_auto(Path(path_str), delimiter=delimiter, **kwargs)
+
+
+def _csv_reader(path: Path, delimiter: str, **kwargs) -> pd.DataFrame:
+    return _cached_csv(str(path), Path(path).stat().st_mtime_ns,
+                       delimiter, **kwargs)
+
+
 def get_store() -> DataStore:
     """Zentraler DataStore (lebt über alle Seiten hinweg in der Session)."""
     if "store" not in st.session_state:
         root = detect_project_root(APP_DIR)
-        st.session_state["store"] = DataStore(root, get_schema())
+        store = DataStore(root, get_schema())
+        store.reader = _csv_reader  # CSV-Reads über den Prozess-Cache
+        st.session_state["store"] = store
     return st.session_state["store"]
+
+
+@st.cache_resource(show_spinner="Baue Token-Index (einmalig pro Korpus) …")
+def _token_index_cached(path_str: str, mtime_ns: int,
+                        _corpus: pd.DataFrame) -> TokenIndex:
+    # _corpus ist per Unterstrich vom Cache-Key ausgenommen; der Key ist
+    # Pfad + mtime der Korpusdatei (Invalidierung nach Pipeline-Läufen).
+    return TokenIndex.build(_corpus["doc_id"].astype(str).tolist(),
+                            _corpus["text"].tolist())
+
+
+def get_token_index() -> TokenIndex:
+    """Token-Index über das geladene Korpus (einmal pro Prozess & Korpusdatei).
+
+    Grundlage für Kollokationen und Dokument-Frequenzen ohne wiederholte
+    Tokenisierung des gesamten Korpus.
+    """
+    store = get_store()
+    corpus = store.load_corpus()
+    path = Path(store.paths["corpus"])
+    mtime = path.stat().st_mtime_ns if path.exists() else 0
+    return _token_index_cached(str(path), mtime, corpus)
 
 
 def get_models() -> ModelStore:
@@ -87,14 +144,35 @@ def df_with_download(df: pd.DataFrame, filename: str, key: str,
     )
 
 
+def render_fig_png(fig: plt.Figure) -> bytes:
+    """PNG-Bytes (300 dpi) einer Figur – einmal gerendert, am Objekt gecacht.
+
+    ``savefig`` mit 300 dpi kostet 0,4–1,5 s pro Figur; ohne Cache lief das
+    bei jedem Streamlit-Rerun erneut (bei mehreren Dendrogrammen entsprechend
+    mehrfach). Der Cache hängt an der Figur selbst, sodass persistierte
+    Figuren (session_state) bei Reruns nichts mehr rendern müssen.
+    """
+    png = getattr(fig, "_signifier_png", None)
+    if png is None:
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+        png = buf.getvalue()
+        fig._signifier_png = png
+    return png
+
+
 def fig_with_download(fig: plt.Figure, filename: str, key: str) -> None:
-    """Matplotlib-Plot anzeigen + PNG-Download (300 dpi wie bisher)."""
-    st.pyplot(fig, use_container_width=True)
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+    """Matplotlib-Plot anzeigen + PNG-Download (300 dpi wie bisher).
+
+    Angezeigt wird das einmal gerenderte 300-dpi-PNG (``st.image``) statt
+    eines erneuten ``st.pyplot``-Renderings pro Rerun – identisches Bild,
+    aber Reruns kosten praktisch nichts mehr.
+    """
+    png = render_fig_png(fig)
+    st.image(png, width="stretch")
     st.download_button(
         "⬇️ PNG herunterladen",
-        buf.getvalue(),
+        png,
         file_name=f"{filename}.png",
         mime="image/png",
         key=f"dl_{key}",

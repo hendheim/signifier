@@ -17,15 +17,19 @@ Die Rechenlogik liegt vollständig in ``explorer_core.analysis_terms`` –
 diese Datei baut nur die Oberfläche.
 """
 
+from pathlib import Path
+
 import streamlit as st
 
-from ui_helpers import (get_store, get_schema, show_error, df_with_download,
-                        metadata_multiselect, parse_terms,
-                        parse_year_range)
+from ui_helpers import (get_store, get_schema, get_token_index, show_error,
+                        df_with_download, metadata_multiselect, parse_terms,
+                        parse_year_range, timed)
 from explorer_core.analysis_terms import (
     term_overview, document_frequencies, concordance,
-    collocations, collocation_documents, word_trends, plot_trends,
+    join_display_metadata, word_trends, plot_trends,
 )
+from explorer_core import token_index as ti
+from explorer_core.data_store import read_csv_auto
 
 from explorer_core.viz_export import save_figure
 
@@ -35,6 +39,20 @@ st.caption("Frequenzen, TF-IDF, Konkordanzen, Kollokationen und Wortverläufe")
 
 store = get_store()
 schema = get_schema()
+
+
+@st.cache_data(show_spinner="Lade korpus_min für die Konkordanz …")
+def _load_kwic_corpus(path_str: str, mtime_ns: int, _schema) -> "pd.DataFrame":
+    """Korpus der min-Stufe für die KWIC-Suche (einmal pro Prozess/Datei).
+
+    Die Konkordanz sucht bewusst in ``korpus_min.csv`` (Originalwortformen
+    inkl. Funktionswörter/Interpunktion nur minimal bereinigt) statt in der
+    stop-Stufe – so zeigen die Belegstellen den natürlichen Kontext.
+    """
+    df = read_csv_auto(Path(path_str), delimiter=_schema.delimiter)
+    content_col = _schema.find_content_column(df)
+    df["text"] = df[content_col].fillna("").astype(str) if content_col else ""
+    return _schema.ensure_doc_id(df)
 
 tab_overview, tab_docfreq, tab_kwic, tab_kollok, tab_trend = st.tabs(
     ["Frequenz & TF-IDF", "Dokument-Frequenz",
@@ -59,16 +77,20 @@ with tab_overview:
                                  key="ov_topn")
     if st.button("Anzeigen", key="ov_btn", type="primary"):
         try:
-            dtm = store.load_dtm()
-            term_cols = store.term_columns(dtm)
-            tfidf_avg = store.tfidf_averages()
-            df = term_overview(dtm, term_cols, tfidf_avg,
-                               search=parse_terms(search_ov) or None,
-                               top_n=int(top_n_ov))
-            st.caption(f"{len(df)} Ausdrücke gefunden.")
-            df_with_download(df, "frequenz_tfidf", key="ov")
+            with timed("Frequenz & TF-IDF"):
+                dtm = store.load_dtm()
+                term_cols = store.term_columns(dtm)
+                tfidf_avg = store.tfidf_averages()
+                st.session_state["ov_result"] = term_overview(
+                    dtm, term_cols, tfidf_avg,
+                    search=parse_terms(search_ov) or None,
+                    top_n=int(top_n_ov))
         except Exception as e:
             show_error(e)
+    if "ov_result" in st.session_state:
+        df = st.session_state["ov_result"]
+        st.caption(f"{len(df)} Ausdrücke gefunden.")
+        df_with_download(df, "frequenz_tfidf", key="ov")
 
 # ---------------------------------------------------------------------------
 # Tab: Dokument-Frequenz – in wie vielen / welchen Dokumenten kommt X vor?
@@ -95,28 +117,45 @@ with tab_docfreq:
             st.warning("Bitte mindestens einen Ausdruck eingeben.")
         else:
             try:
-                corpus = store.load_corpus()
-                meta = store.load_metadata()
-                df = document_frequencies(corpus, meta, schema, terms,
-                                          display_cols_df,
-                                          use_regex=use_regex,
-                                          case_sensitive=case_sens)
-                st.caption(f"{len(df)} Dokument-Treffer.")
-                df_with_download(df, "dokument_frequenz", key="docfreq")
+                with timed("Dokument-Frequenz"):
+                    corpus = store.load_corpus()
+                    meta = store.load_metadata()
+                    token_counts = get_token_index().token_counts()
+                    st.session_state["docfreq_result"] = document_frequencies(
+                        corpus, meta, schema, terms, display_cols_df,
+                        use_regex=use_regex, case_sensitive=case_sens,
+                        token_counts=token_counts)
             except Exception as e:
                 show_error(e)
+    if "docfreq_result" in st.session_state:
+        df = st.session_state["docfreq_result"]
+        st.caption(f"{len(df)} Dokument-Treffer.")
+        df_with_download(df, "dokument_frequenz", key="docfreq")
 
 # ---------------------------------------------------------------------------
 # Tab: Konkordanz – Keyword in Context (KWIC)
 # ---------------------------------------------------------------------------
 with tab_kwic:
     st.subheader("Konkordanz (Keyword in Context)")
+    st.caption("Gesucht wird in der **min-Stufe** "
+               "(`output/processed_corpus/korpus_min.csv`) – sie enthält die "
+               "Originalwortformen und zeigt den natürlichen Kontext.")
     c1, c2, c3 = st.columns([3, 1, 1])
     kwic_term = c1.text_input("Suchbegriff", key="kwic_term")
     kwic_context = c2.number_input("Kontext (Zeichen)", 10, 300, 50, 10,
                                    key="kwic_ctx", help='Anzahl der Zeichen links und rechts des Treffers in der Konkordanz (KWIC).')
     kwic_max = c3.number_input("Max. Treffer", 100, 20000, 5000, 100,
                                key="kwic_max", help='Obergrenze der angezeigten Treffer, damit die Tabelle bei häufigen Wörtern handhabbar bleibt.')
+    c4, c5 = st.columns(2)
+    kwic_whole = c4.checkbox(
+        "Nur ganze Wörter (genaue Suchzeichenfolge)", key="kwic_whole",
+        help="An: Es zählt nur die genaue Suchzeichenfolge als eigenes Wort "
+             "(»Hund« trifft nicht »Hunde«). Aus: auch Treffer innerhalb "
+             "längerer Wörter.")
+    kwic_case = c5.checkbox(
+        "Groß-/Kleinschreibung beachten", value=True, key="kwic_case",
+        help="An (Standard, wie bisher): »Hund« trifft nicht »hund«. "
+             "Aus: Schreibung wird ignoriert.")
     display_cols_kwic = metadata_multiselect("Anzeigespalten (Metadaten)",
                                              key="kwic_cols")
     if st.button("Konkordanz erstellen", key="kwic_btn", type="primary"):
@@ -124,17 +163,40 @@ with tab_kwic:
             st.warning("Bitte einen Suchbegriff eingeben.")
         else:
             try:
-                corpus = store.load_corpus()
-                meta = store.load_metadata()
-                df = concordance(corpus, meta, kwic_term.strip(),
-                                 display_cols_kwic,
-                                 context=int(kwic_context),
-                                 max_hits=int(kwic_max))
-                st.caption(f"{len(df)} Belegstellen.")
-                df_with_download(df, f"konkordanz_{kwic_term.strip()}",
-                                 key="kwic")
+                with timed("Konkordanz"):
+                    min_path = (Path(store.project_root) / "output"
+                                / "processed_corpus" / "korpus_min.csv")
+                    if not min_path.exists():
+                        raise FileNotFoundError(
+                            f"korpus_min.csv nicht gefunden ({min_path}). "
+                            "Bitte zuerst das Korpus verarbeiten "
+                            "(Seite 'Korpus verarbeiten').")
+                    corpus = _load_kwic_corpus(
+                        str(min_path), min_path.stat().st_mtime_ns, schema)
+                    meta = store.load_metadata()
+                    # Autor-Spalte für die Spalte 'treffer_autor' (Gesamt-
+                    # treffer des Autors): bevorzugt author_surname, sonst
+                    # erste Spalte mit 'author'/'autor' im Namen.
+                    author_col = ("author_surname"
+                                  if "author_surname" in meta.columns else
+                                  next((c for c in meta.columns
+                                        if "author" in str(c).lower()
+                                        or "autor" in str(c).lower()), None))
+                    st.session_state["kwic_result"] = concordance(
+                        corpus, meta, kwic_term.strip(), display_cols_kwic,
+                        context=int(kwic_context), max_hits=int(kwic_max),
+                        case_sensitive=bool(kwic_case),
+                        whole_word=bool(kwic_whole),
+                        author_col=author_col)
+                    st.session_state["kwic_result_term"] = kwic_term.strip()
             except Exception as e:
                 show_error(e)
+    if "kwic_result" in st.session_state:
+        df = st.session_state["kwic_result"]
+        st.caption(f"{len(df)} Belegstellen.")
+        df_with_download(df,
+                         f"konkordanz_{st.session_state['kwic_result_term']}",
+                         key="kwic")
 
 # ---------------------------------------------------------------------------
 # Tab: Kollokation – häufige Nachbarn (FREQ) oder statistisch auffällige (PMI)
@@ -161,15 +223,19 @@ with tab_kollok:
             st.warning("Bitte mindestens einen Zielausdruck eingeben.")
         else:
             try:
-                corpus = store.load_corpus()
-                df = collocations(corpus, targets, window=int(kol_window),
-                                  top_n=int(kol_topn),
-                                  min_freq=int(kol_minfreq),
-                                  ngram=int(kol_ngram), metric=kol_metric)
+                with timed("Kollokationen"):
+                    index = get_token_index()
+                    df = ti.collocations(index, targets,
+                                         window=int(kol_window),
+                                         top_n=int(kol_topn),
+                                         min_freq=int(kol_minfreq),
+                                         ngram=int(kol_ngram),
+                                         metric=kol_metric)
                 st.session_state["kol_result"] = df
                 st.session_state["kol_params"] = dict(
                     targets=targets, window=int(kol_window),
                     ngram=int(kol_ngram))
+                st.session_state.pop("kol_docs_result", None)
             except Exception as e:
                 show_error(e)
 
@@ -193,18 +259,23 @@ with tab_kollok:
             if st.button("Dokumente anzeigen", key="kol_docs_btn"):
                 target, collocate = (p.strip() for p in chosen.split("↔"))
                 try:
-                    corpus = store.load_corpus()
-                    meta = store.load_metadata()
-                    df_docs = collocation_documents(
-                        corpus, meta, target, collocate,
-                        display_cols_kol,
-                        window=params["window"], ngram=params["ngram"])
-                    st.caption(f"{len(df_docs)} Dokumente mit dieser "
-                               "Kollokation.")
-                    df_with_download(df_docs, "kollokation_dokumente",
-                                     key="kol_docs")
+                    with timed("Belegdokumente"):
+                        index = get_token_index()
+                        meta = store.load_metadata()
+                        df_docs = ti.collocation_documents(
+                            index, target, collocate,
+                            window=params["window"], ngram=params["ngram"])
+                        st.session_state["kol_docs_result"] = \
+                            join_display_metadata(df_docs, meta,
+                                                  display_cols_kol)
                 except Exception as e:
                     show_error(e)
+            if "kol_docs_result" in st.session_state:
+                df_docs = st.session_state["kol_docs_result"]
+                st.caption(f"{len(df_docs)} Dokumente mit dieser "
+                           "Kollokation.")
+                df_with_download(df_docs, "kollokation_dokumente",
+                                 key="kol_docs")
 
 # ---------------------------------------------------------------------------
 # Tab: Wortverläufe – Häufigkeit über die Jahre

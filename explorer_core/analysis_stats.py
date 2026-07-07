@@ -44,8 +44,32 @@ _CONTENT_FALLBACKS = ["content_stop", "content_lem", "content_min", "content_gen
 
 
 def _token_counts(series: pd.Series) -> pd.Series:
-    """Tokens pro Zelle (whitespace-getrennt)."""
-    return series.fillna("").astype(str).map(lambda s: len(s.split()))
+    """Tokens pro Zelle (whitespace-getrennt).
+
+    Vektorisiert über ``str.count`` statt ``map(len(split()))`` – zählt
+    identisch, materialisiert aber keine Token-Listen (bei ~45 Mio. Tokens
+    Sekunden statt Minuten und ein Bruchteil des Speichers).
+    """
+    return (series.fillna("").astype(str)
+            .str.count(r"\S+").fillna(0).astype(int))
+
+
+def stage_file_stamp(project_root: Path, stages: List[str]) -> tuple:
+    """(Stufe, mtime_ns) je vorhandener Stufen-Datei.
+
+    Als Cache-Key für die Dashboard-Seite gedacht: Ändert sich eine
+    Korpus-Datei (neuer Pipeline-Lauf), ändert sich der Stempel und der
+    Streamlit-Cache wird automatisch ungültig.
+    """
+    out = []
+    for s in stages:
+        fname, _ = STAGE_FILES.get(s, STAGE_FILES["stop"])
+        p = _stage_path(project_root, s, fname)
+        try:
+            out.append((s, p.stat().st_mtime_ns))
+        except OSError:
+            pass
+    return tuple(out)
 
 
 def _content_col(df: pd.DataFrame, preferred: str) -> Optional[str]:
