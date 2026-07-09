@@ -243,7 +243,7 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
   
 - **4.4.4 · Topics nachverarbeiten** – Topic-Ranking (`tt02`)
   
-- **4.4.5 · Document-Term-Topic-Index erstellen** –Termset-Topic-Text-Verhältnisse berechnen und nachverarbeiten (`tt03`–`tt04`)
+- **4.4.5 · Document-Term-Topic-Index erstellen** – Text-Termset-Topic-Verhältnisse berechnen und nachverarbeiten (`tt03`–`tt04`)
 
 
 **Exploration**
