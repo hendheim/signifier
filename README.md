@@ -135,7 +135,7 @@ _signifier_  besteht aus drei Schichten:
 
 <br>
 
-### 5.1 NLP-Pipeline (s01–s07)
+### 5.1 `nlpp (s01–s07)
 
 Die Pipeline erzeugt aus `korpus/korpus.csv` schrittweise alle Ausgaben unter
 `output/`:
@@ -162,6 +162,13 @@ Das Wort-Vektor-Modell setzt die Einstellung weiterer Parameter voraus und steht
 
 Die Pipeline ist über **TOML-Dateien** konfigurierbar.
 Voreingestellt ist: `config/signifier_v1.toml`).
+
+Nach manueller Erstellung eines Termsets, der Erstellung und dem Tagging von Topics können die entsprechenden Listen mit `tt_s01_stop_pos_tag`- `tt_s04_dtti` weiterverarbeitet werden. Ihnen entsprechen jeweils eigene Seiten im Dashboard: **4.2.2 Tags verarbeiten**, **4.4.4 Topics nachverarbeiten**, **4.4.5 Document-Term-Topic-Index erstellen** (zwei Tabs).
+
+12. **`tt_s01_stop_pos_tag` –  Verarbeitung einer semantisch getaggten POS-Liste und Ausgabe einer Pivot-Tabelle in `output/processed_tag`
+13. **`tt_s02_topics` – Verarbeitung von Topics in `output/processed_topics/[Modell]/`
+14. **`tt_s03_dtti.py` – Berechnung der Text-Term-Topic-Verhältnisse in `output/processed_termset/[Termset]/`
+15. **`tt_s04_dtti` – Verarbeitung der Text-Term-Topic-Verhältnisse in `output/processed_termset/[Termset]/`
 
 **Start der Pipeline** – entweder über die Dashboard-Seite *Korpus verarbeiten*
 oder über CLI:
