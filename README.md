@@ -125,13 +125,13 @@ werden anschließend `korpus/korpus.csv` und `korpus/metadaten.csv`
 
 _signifier_  besteht aus drei Schichten:
 
-1. **NLP-Pipeline** (`s01`–`s07`, `tt_s01`–`tt_s04` ) – die unveränderte Verarbeitungslogik des
+1. **`nlp_pipeline/`** (`s01`–`s07`, `tt_s01`–`tt_s04` ) – die unveränderte Verarbeitungslogik des
    Korpus und die Verarbeitung des Korpus nach der Tilgung von Named Entities.
 2. **`explorer_core/`** – UI-freie Logik (Daten/Modelle, Schema, Analysen,
    Topic-Modellierung). Die Module kennen weder Tkinter noch Streamlit und sind
    so auch in Notebooks/Seminaren nutzbar.
-3. **Dashboard** (`Willkommen.py` + `pages/`) – die Streamlit-Oberfläche, die
-   nur „verkabelt" und auf `explorer_core` zugreift.
+3. **`Willkommen.py` + `pages/`** – die Streamlit-Oberfläche, die auf `explorer_core/` zugreift.
+    
 
 <br>
 
