@@ -35,7 +35,7 @@ Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasi
 + Metriken für Wort-Vektor- und Topic-Modelle,
 + Dimensionsreduktion der Texte mit PCA, MDS und t-SNE und UMAP,
 + ein konfigurierbares Metadatenschema,
-+ die automatisierte Identifikation von Spaltentrennzeichen.
++ die automatisierte Identifikation von Spaltentrennzeichen,
 + Infoboxen zu Parametern der Verarbeitungsschritte,
 + Speicherung der Parameter.
 
