@@ -18,7 +18,7 @@ Die Pipeline und das Dashboard können mit Anpassungen für alle deutschsprachig
 
 Anhand der Listen `resources/preprocessing_lists/ocr_post-correction_dictionary.txt`, `resources/preprocessing_lists/replacements.json` und `resources/preprocessing_lists/stopwords.txt` und den Einstellungen in der `config/signifier_v1` können die Ersetzungen sowie Tilgungen an das zugrundeliegende Projekt angepasst werden.
 
-_signifier_ ging aus dem Projekt [*FaDeLive*](https://doi.org/10.5281/zenodo.1797902) hervor, in dem
+_signifier_ ging aus dem Projekt [*FaDeLive*](https://doi.org/10.5281/zenodo.18011087) hervor, in dem
 analoge Quellen fotomechanisch gescannt, mit OCR verarbeitet und in Hinblick auf OCR-Fehler gesäubert wurden. Diese Verarbeitungsstufe TXT (content)* ist die Grundlage für die weitere Prozessierung der Daten. Siehe zur Vorverarbeitung und Verarbeitung des Korpus die Diagramme: <https://doi.org/10.48693/730>.
 
 Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasiertes Streamlit-Dashboard** übertragen. 
