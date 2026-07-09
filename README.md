@@ -40,7 +40,7 @@ Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasi
 + Speicherung der Parameter.
 
 **Schlagwörter**: Begriffsgeschichte, Computational
-Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic-Modeling, word2vec
+Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic Modeling, Word2Vec
 
 <br>
 
