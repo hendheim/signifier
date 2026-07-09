@@ -24,16 +24,16 @@ analoge Quellen fotomechanisch gescannt, mit OCR verarbeitet und in Hinblick auf
 Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasiertes Streamlit-Dashboard** übertragen. 
 Änderungen und Erweiterungen sind:
 + Erstellung einer `.csv`-Datenbank auf Grundlage eines Korpus aus `.txt`- oder `.xml`-Dateien,
-+ Vorverarbeitung berücksichtigt Groß- und Kleinschreibung
++ Vorverarbeitung berücksichtigt Groß- und Kleinschreibung,
 + Filterung von Named Entities und Verarbeitung des Korpus nach einer Filterung von Named-Entities, `-n`
-+ Anpassung der Token-Metadaten-Statistik an die Metadaten des verarbeiteten Korpus
++ Anpassung der Token-Metadaten-Statistik an die Metadaten des verarbeiteten Korpus,
 + semantisches Tagging der POS-getaggten Frequenzliste im Dashboard,
 + die Lemmatisierung erfolgt mit `spaCy` und nicht mit dem `HanoverTagger`,
 + Topic-Modelling mit `scikitlearn` und `MALLET`,
-+ Tagging des Topic-Modells
++ Tagging des Topic-Modells,
 + Nachverarbeitung des Topic-Modells zur Erzeugung des Document-Term-Topic-Indexes 
-+ Metriken für Wort-Vektor- und Topic-Modelle
-+ Dimensionsreduktion der Texte mit PCA, MDS und t-SNE und UMAP
++ Metriken für Wort-Vektor- und Topic-Modelle,
++ Dimensionsreduktion der Texte mit PCA, MDS und t-SNE und UMAP,
 + ein konfigurierbares Metadatenschema,
 + die automatisierte Identifikation von Spaltentrennzeichen.
 + Infoboxen zu Parametern der Verarbeitungsschritte,
