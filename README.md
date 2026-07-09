@@ -167,7 +167,7 @@ Nach manueller Erstellung eines Termsets, der Erstellung und dem Tagging von Top
 
 12. **`tt_s01_stop_pos_tag`** –  Verarbeitung einer semantisch getaggten POS-Liste und Ausgabe einer Pivot-Tabelle in `output/processed_tag`
 13. **`tt_s02_topics`** – Verarbeitung von Topics in `output/processed_topics/[Modell]/`
-14. **`tt_s03_dtti.py`** – Berechnung der Text-Term-Topic-Verhältnisse in `output/processed_termset/[Termset]/`
+14. **`tt_s03_dtti`** – Berechnung der Text-Term-Topic-Verhältnisse in `output/processed_termset/[Termset]/`
 15. **`tt_s04_dtti`** – Verarbeitung der Text-Term-Topic-Verhältnisse in `output/processed_termset/[Termset]/`
 
 **Start der Pipeline** – entweder über die Dashboard-Seite *Korpus verarbeiten*
