@@ -36,7 +36,7 @@ Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1
 
 ### Behoben
 
-- **Seite 4.4.3 Topics benennen: Eintragungen wurden erst nach Neuladen übernommen.**
+- **Seite 4.4.3 Topics taggen: Eintragungen wurden erst nach Neuladen übernommen.**
   Die editierte Tabelle wurde bei jedem Rerun in die Eingabe zurück­
   geschrieben, wodurch Editor-Zustand und Eingabe in Konflikt gerieten und
   gerade getippte Namen „sprangen". Die Baseline bleibt jetzt stabil, das
