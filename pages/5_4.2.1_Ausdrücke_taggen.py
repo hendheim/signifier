@@ -42,18 +42,41 @@ default_pos = project_root / "output" / "vocabular" / "vocab_top5000_stop_pos.cs
 # 1) Liste laden
 # ---------------------------------------------------------------------------
 st.subheader("1 · POS-Liste laden")
+st.caption("Frische Rohliste aus s01_4 laden **oder** eine bereits begonnene "
+           "Tag-Liste aus `resources/stop_pos_tag/` weiterbearbeiten.")
 
-pos_path = st.text_input("Pfad zur POS-Frequenzliste (Spalten `word`, `pos`, `count`)",
-                        value=str(default_pos))
+resources_dir = project_root / "resources" / "stop_pos_tag"
+started = tagging.existing_tag_lists(resources_dir)
 
-col_load, col_info = st.columns([1, 3])
-with col_load:
-    load_clicked = st.button("Laden", use_container_width=True)
+# Auswahl: Rohliste + begonnene Tag-Listen (mit manueller Pfad-Alternative).
+options: dict = {}
+if default_pos.exists():
+    options[f"🆕 Rohliste: {default_pos.name}"] = default_pos
+for p in started:
+    options[f"✏️ Begonnene Tag-Liste: {p.name}"] = p
+
+sel_path = None
+if options:
+    sel_label = st.selectbox("Liste wählen", list(options.keys()),
+                             key="tag_src_sel")
+    sel_path = options[sel_label]
+
+with st.expander("…oder eigenen Pfad angeben"):
+    manual = st.text_input(
+        "Pfad zur POS-/Tag-Liste (Spalten `word`, `pos`, `count`)",
+        value="" if sel_path is not None else str(default_pos),
+        key="tag_path_manual")
+
+chosen_path = (Path(manual) if manual.strip()
+               else (sel_path if sel_path is not None else default_pos))
+
+load_clicked = st.button("Laden", use_container_width=False)
 
 # Geladene Tabelle lebt in der Session, damit Edits beim Tagging erhalten bleiben.
 if load_clicked:
     try:
-        df = tagging.load_pos_list(Path(pos_path), delimiter=store.schema.delimiter)
+        df = tagging.load_pos_list(Path(chosen_path),
+                                   delimiter=store.schema.delimiter)
         ok, msg = tagging.validate(df)
         if not ok:
             st.error(msg)
@@ -62,8 +85,10 @@ if load_clicked:
             # Alten Editor-Status verwerfen, sonst würde der gespeicherte
             # Bearbeitungsstand (Deltas) auf die NEU geladene Liste angewandt.
             st.session_state.pop("tag_editor", None)
-            st.session_state["tag_path"] = pos_path
-            st.success(f"{len(df):,} Zeilen geladen.")
+            st.session_state["tag_path"] = str(chosen_path)
+            _done, _total = tagging.tagging_progress(df)
+            st.success(f"{len(df):,} Zeilen geladen "
+                       f"({_done} bereits getaggt).")
     except Exception as exc:
         show_error(exc)
 

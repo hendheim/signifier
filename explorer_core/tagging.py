@@ -50,6 +50,18 @@ def load_pos_list(path: Path, delimiter: str = "auto") -> pd.DataFrame:
     return df
 
 
+def existing_tag_lists(resources_dir: Path) -> List[Path]:
+    """Bereits gespeicherte (ggf. begonnene) Tag-Listen im Zielordner.
+
+    Grundlage dafür, eine früher begonnene Liste erneut zu laden und
+    weiterzubearbeiten (neueste zuerst über den Versionszähler im Namen).
+    """
+    resources_dir = Path(resources_dir)
+    if not resources_dir.exists():
+        return []
+    return sorted(resources_dir.glob("*.csv"), reverse=True)
+
+
 def validate(df: pd.DataFrame) -> Tuple[bool, str]:
     """Prüft, ob die Pflichtspalten vorhanden sind."""
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]

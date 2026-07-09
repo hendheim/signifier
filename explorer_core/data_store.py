@@ -170,7 +170,7 @@ DISCOVERY_PATTERNS: Dict[str, List[str]] = {
     "cosine": ["output/cosine/*.csv"],
     # Topic-Model-Quellen: resources/topic-models/<Modell>/ (Ordnername beliebig,
     # daher '*' statt 'topics*'; Dateinamen mit Fallbacks für beide Formate).
-    "topics_dist": ["resources/topic-models/*/document-topics-distribution*.csv",
+    "topics_dist": ["resources/topic-models/*/document-topics-distribution*pro_text.csv",
                     "resources/topic-models/*/*document*topic*.csv"],
     "w2v_model": ["output/word2vec_models/*.model", "output/word2vec_models/*.kv"],
     "termset": ["resources/termsets/*.csv"],

@@ -39,7 +39,8 @@ Alle Funktionen der früheren Versionen wurden in ein **ein gemeinsames, webbasi
 + Infoboxen zu Parametern der Verarbeitungsschritte,
 + Speicherung der Parameter.
 
-**Schlagwörter**: Begriffsgeschichte, Computational Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic-Modeling, word2vec
+**Schlagwörter**: Begriffsgeschichte, Computational
+Discourse Analyses, Computational Literary Studies, Computerlinguistik, Digital Humanities, Digital Social Sciences, Educational Data Mining, Text Mining, Topic-Modeling, word2vec
 
 <br>
 
@@ -110,7 +111,9 @@ In dem Dashboard kann eine `korpus.csv`/`metadaten.csv` aufgebaut werden:
   entsteht ein minimales Korpus (`id` + `content`),
 - **aus `.xml`-Dateien (TEI)** – Metadaten werden per XPath aus dem TEI-Header
   gelesen, der Fließtext aus `.//tei:text//tei:body`; die Ziel-XML-Pfade sind
-  als Metadaten-Kategorien frei definierbar.
+  als Metadaten-Kategorien frei definierbar. `<head>`-Elemente im Body
+  (Kapitel-/Abschnittsüberschriften) werden dabei **nicht** in den Fließtext
+  übernommen; der Text direkt hinter einer Überschrift bleibt erhalten.
 
 Die Metadaten lassen sich vor dem Speichern prüfen und bearbeiten. Geschrieben
 werden anschließend `korpus/korpus.csv` und `korpus/metadaten.csv`
@@ -191,8 +194,8 @@ lassen sich per Argument überschreiben.
 | `topic_metrics.py` | Qualitätsmetriken für Topic-Modelle (Diversität, Kohärenz) |
 | `wvm_metrics.py` | Qualitätsmetriken für das Word2Vec-Modell |
 | `mallet_runner.py` / `mallet_setup.py` | MALLET einrichten und als Topic-Modeller aufrufen |
-| `tagging.py` / `tag_processing.py` | semantisches Taggen der POS-Liste und deren Weiterverarbeitung|
-| `topic_tagging.py` | Topics einer vollständigen Topic-Word-Matrix benennen (versioniert nach `resources/topic_names/`) |
+| `tagging.py` / `tag_processing.py` | semantisches Taggen der POS-Liste und deren Weiterverarbeitung; bereits begonnene Tag-Listen können erneut geladen und fortgesetzt werden |
+| `topic_tagging.py` | Topics einer vollständigen Topic-Word-Matrix benennen; die Namen werden versioniert in den **Topic-Modell-Ordner** geschrieben – in die Topic-Word-Matrix **und** die Document-Topic-Matrix (Dateimuster `[modell]_[matrixtyp]_tag_v1.csv`) |
 | `pipeline_runner.py` | startet die NLP-Pipeline als Subprozess (Live-Log) |
 | `viz_export.py` | speichert zu jeder Grafik die verwendeten Hyperparameter mit |
 
@@ -217,11 +220,11 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
   
 - **4.1 · Token-Statistik erstellen** – Tokens je Stufe, Milestones (Token-Abschnitte mit Jahresspanne), Frequenz je Metadatenspalte (Dokumente + Tokens je Wert); per Checkbox auswählbar
 
-- **4.2.1 · Ausdrücke taggen** – POS-Frequenzliste um die Tags `tag1, tag2, tag3` ergänzen
+- **4.2.1 · Ausdrücke taggen** – POS-Frequenzliste um die Tags `tag1, tag2, tag3` ergänzen; bereits begonnene Tag-Listen aus `resources/stop_pos_tag/` können geladen und weiterbearbeitet werden
   
 - **4.2.2 · Tags verarbeiten** – getaggte POS-Liste verarbeiten (`tt01`)
 
-- **4.2.3 · Termset erstellen** – Tags und Ausdrücken für die Erstellung eines Termsets auswählen
+- **4.2.3 · Termset erstellen** – aus der Tags-Pivot-Tabelle (Seite *Tags verarbeiten*) per Markierung ein Termset zusammenstellen und nach `resources/termsets/` speichern
   
 - **4.3 · Wort-Vektor-Modelle erstellen** – ein Wort-Vektor-Modell wird erstellt (`s07`)
   
@@ -229,7 +232,7 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
   
 - **4.4.2 · Topic-Modell erstellen** – Topics mit scikit-learn (NMF/LDA) bzw. MALLET, optional mit Chunking
   
-- **4.4.3 · Topics taggen** – vollständige Topic-Word-Matrix ansehen und je Topic einen Namen vergeben (versioniert nach `resources/topic_names/`)
+- **4.4.3 · Topics taggen** – vollständige Topic-Word-Matrix ansehen und je Topic einen Namen vergeben; die Namen werden in den **Topic-Modell-Ordner** geschrieben – in die Topic-Word-Matrix **und** die Document-Topic-Matrix (deren Topic-Spalten umbenannt werden); begonnene Listen lassen sich fortsetzen
   
 - **4.4.4 · Topics nachverarbeiten** – Topic-Ranking (`tt02`)
   
@@ -246,9 +249,9 @@ Die Seiten erscheinen links im Menü in dieser Reihenfolge (Dateipräfix steuert
   
 - **5.4 · Termset-Vektoren erkunden** – UMAP-Cluster, Wortwolke und Dendrogramme eines Termsets
   
-- **5.5 · Topics erkunden** – diachrone Topicverläufe ausgewählter Topics (**in v0.3.0 nicht funktionsfähig**)
+- **5.5 · Topics erkunden** – diachrone Topicverläufe ausgewählter Topics
   
-- **5.6 · DTTI erkunden** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
+- **5.6 · Tag-Topics erkunden** – Tag-Topic-Relevanz (Bubbles), Jahresverteilungen, Tendenzkurven, Ranglisten
   
 
 <br>
@@ -267,7 +270,7 @@ Mit der Verarbeitung in _4.4.4 · Topics nachverarbeiten_ und _4.4.5 · Document
   `tag2` und `tag3` ergänzt werden, die Ausdrücke mit bis zu drei Kategorien
   abstrahieren (_4.2.1 · Ausdrücke taggen_),
 - daraus eine Pivot-Tabelle erzeugen (_4.2.2 · Tags verarbeiten_),
-- für die Forschungsfrage relevante Tags und Ausdrücke aus der Tabelle wählen und ein Termset bilden (_4.2.3 · Termset erstellen_)
+- für die Forschungsfrage relevante Tags und Ausdrücke aus der Tabelle wählen und ein Termset bilden,
 - Termsets auf Topics und Texte abbilden und einen Dokument-Term-Topic-Index berechnen (_4.4.4 · Topics nachverarbeiten_, _4.4.5 · Document-Term-Topic-Index erstellen_).
 
 Für die Modellierung der Topics kann das Dashboard `scikit-learn` (NMF/LDA) oder
@@ -282,105 +285,120 @@ Siehe `requirements.txt`.
 ## 8. Projektstruktur
 
 ```
-signifier
-│   Willkommen.py            				# Streamlit-Startseite
-│   ui_helpers.py            				# Streamlit-Verkabelung (Session, Downloads, Fehler)
-│   run_pipeline.py          				# startet die NLP-Pipeline über CLI
-│   requirements.txt
-│
-│
-├───config
-│       signifier_v1.toml
-│       metadata_schema.yaml
-│
-├───explorer_core           				# UI-freie Logik
-│       data_store.py
-│       schema.py
-│       corpus_build.py
-│       corpus_segment.py
-│       analysis_terms.py
-│       analysis_texts.py
-│       analysis_topics.py
-│       analysis_stats.py
-│       analysis_vectors.py
-│       topic_model.py
-│       topic_metrics.py
-│       wvm_metrics.py
-│       mallet_runner.py
-│       mallet_setup.py
-│       tagging.py
-│       tag_processing.py
-│       topic_tagging.py
-│       token_index.py
-│       pipeline_runner.py
-│       viz_export.py
+signifier/
+|   CHANGELOG.md
+|   CITATION.cff
+|   LICENSE.md
+|   README.md
+|   requirements.txt
+|   run_pipeline.py                     # Startet die NLP-Pipeline über CLI
+|   start_dashboard.bat
+|   start_dashboard.sh
+|   start_pipeline.bat
+|   start_pipeline.sh
+|   ui_helpers.py                       # Streamlit-Verkabelung (Session, Downloads, Fehler)
+|   Willkommen.py                       # Streamlit-Startseite
+|               
++---.streamlit
+|       config.toml
 |
-├───korpus
-│       korpus.csv          				 # Metadaten + content
-│       metadaten.csv        				# nur Metadaten
++---config
+|       metadata_schema.yaml
+|       signifier_v1.toml
 |
-├───pages                   				# Dashboard-Seiten 
-│       0_0_Korpus_Datenbank_erstellen.py
++---explorer_core                        # UI-freie Logik
+|       analysis_stats.py                # Tokenstatistik im Verhältnis zu den Metadaten
+|       analysis_terms.py                # Frequenzen, Kollokationen, Konkordanzen, Wortverläufe
+|       analysis_texts.py                # Dimensionsreduktion und Cluster
+|       analysis_topics.py               # Topicverläufe
+|       analysis_vectors.py              # Word-Embeddings
+|       corpus_build.py                  # Korpus-Erstellung aus .txt- oder .xml-Dateien
+|       corpus_segment.py                # Chunking für die Erstellung von Topic-Modellen
+|       data_store.py                    # Korpus anhand von verarbeiteten Dateien laden
+|       mallet_runner.py                 # MALLET ausführen
+|       mallet_setup.py                  # MALLET laden 
+|       pipeline_runner.py               # Orchestrierung der NLP-Pipeline
+|       schema.py                        # Flexibilisierung der Metadaten
+|       tagging.py                       # manuelles Tagging von Ausdrücken
+|       tag_processing.py                # Verarbeitung der Tags
+|       token_index.py                   # Caching der Tokens
+|       topic_metrics.py                 # einfache Metriken für das Topic-Modell
+|       topic_model.py                   # Erstellung von Topic-Modellen
+|       topic_tagging.py                 # manuelles Tagging von Topic-Modellen
+|       viz_export.py                    # Unterstützungsfunktionen zum Rendern der Grafiken
+|       wvm_metrics.py                   # einfache Metriken für Wort-Vektor-Modelle
+|       __init__.py
+|
++---korpus/                             # [Dynamic] wird manuell oder über Dateiimport erstellt
+|       korpus.csv                      # Metadaten + Content
+|       metadaten.csv                   # Nur Metadaten
+|
++---nlp_pipeline                        # Voverrabeitung, NER, Tag-Topic-Verarbeitung
+|       pipeline_config.py
+|       pipeline_utils.py
+|       s01_pos_tag.py
+|       s01_preprocessing.py
+|       s01_vocabulary.py
+|       s02_gensim_preprocessing.py
+|       s03_dtm_tfidf.py
+|       s04_cosine.py
+|       s05_cosine_intervals.py
+|       s06_tfidf_rank.py
+|       s07_word_vectors.py
+|       s08_name_removal.py
+|       tt_s01_stop_pos_tag.py
+|       tt_s02_topics.py
+|       tt_s03_dtti.py
+|       tt_s04_dtti.py
+|       __init__.py
+|
++---output/                             # [Dynamic] Erzeugte Daten
+|       processed_corpus/               # korpus_min/lem/stop.csv
+|       vocabular/                      # Vokabular und Frequenzen
+|       statistics/                     # Token-Statistiken im Verhältnis zu den Metadaten
+|       dtm_tfidf_stop/                 # DTM- und TF-IDF-Matrizen
+|       cosine/                         # Kosinus-Matrizen
+|       intervals/                      # Intervall-spezifische Ausgaben
+|       tfidf_rank/                     # TF-IDF-Rankings
+|       word2vec_models/                # Wort-Vektor-Modell
+|       processed_tag/                  # Verarbeitete Tags
+|       processed_topics/               # Je Modell: <Modell>/
+|       processed_termset/              # Je Termset: <Termset>/<Modell>/
+
++---pages                               # Dashboard-Seiten
+|       0_0_Korpus_Datenbank_erstellen.py
+|       10_4.4.2_Topic-Modell_erstellen.py
+|       11_4.4.3_Topics_taggen.py
+|       12_4.4.4_Topics_nachverarbeiten.py
+|       13_4.4.5_Document-Term-Topic-Index_erstellen.py
+|       14_5.1_Ausdrücke_erkunden.py
+|       15_5.2_Texte_erkunden.py
+|       16_5.3_Wort-Vektoren_erkunden.py
+|       17_5.4_Termset-Vektoren_erkunden.py
+|       18_5.5_Topics_erkunden.py
+|       19_5.6_DTTI erkunden.py
 |       1_1._Korpus_verarbeiten.py
-│       2_2._Verarbeitetes_Korpus_laden.py
-│       3_3._Metadatenschema_fixieren.py
-│       4_4.1_Token-Statistik_erstellen.py
-│       5_4.2.1_Ausdrücke_taggen.py
-│       6_4.2.2_Tags_verarbeiten.py
-│       7_4.2.3_Termset_erstellen.py
-│       8_4.3_Wort-Vektor-Modell_erstellen.py
-│       9_4.4.1_MALLET_einrichten.py
-│       10_4.4.2_Topic-Modell_erstellen.py
-│       11_4.4.3_Topics_taggen.py
-│       12_4.4.4_Topics_nachverarbeiten.py
-│       13_4.4.5_Document-Term-Topic-Index_erstellen.py
-│       14_5.1_Ausdrücke_erkunden.py
-│       15_5.2_Texte_erkunden.py
-│       16_5.3_Wort-Vektoren_erkunden.py
-│       17_5.4_Termset-Vektoren_erkunden.py
-│       18_5.5_Topics_erkunden.py
-│       19_5.6_DTTI erkunden.py
-│
-├───nlp_pipeline
-│       pipeline_config.py
-│       pipeline_utils.py
-│       s01_pos_tag.py
-│       s01_preprocessing.py
-│       s01_vocabulary.py
-│       s02_gensim_preprocessing.py
-│       s03_dtm_tfidf.py
-│       s04_cosine.py
-│       s05_cosine_intervals.py
-│       s06_tfidf_rank.py
-│       s07_word_vectors.py
-│       s08_name_removal.py
-│       tt_s01_stop_pos_tag.py
-│       tt_s02_topics.py
-│       tt_s03_dtti.py
-│       tt_s04_dtti.py
-│
-├───output                            # erzeugte Daten (Pipeline + Verarbeitung)
-│        processed_corpus             # korpus_min/lem/stop.csv
-│        vocabular 			 				   # Vokabular und Frequenzen sowie das POS-getaggte Vokabular 
-│        statistics                   # Statistiken über die Verhältnisse von Tokens zu Metadaten
-│        dtm_tfidf_stop       				# DTM- und TF-IDF-Matrizen
-│        cosine 				 				    # Kosinus-Matrizen
-│        intervals 		     				 # intervall-spezifische Ausgaben
-│        tfidf_rank 							   # ranking der Ausdrücke und Texte anhand der TF-IDF-Werte
-│        word2vec_models 					  # Wort-Vektor-Modell
-│        processed_tag 						  # verarbeitete Tags
-│        processed_topics 					 # verarbeitete Topics, je Topic-Modell: <Modell>/
-│        processed_termset 					# DTTI je Termset & Topic-Modell: <Termset>/<Modell>/
-│
-└───resources
-    ├───preprocessing_lists  				# Stoppwörter, Ersetzungen, OCR-Korrektur
-    │       ocr_post-correction_dictionary.txt
-    │       replacements_v3.json
-    │       stopwords_v4.txt
-    ├───stop_pos_tag         				# getaggte POS-Listen (werden im Lauf der Verarbeitung erstellt)
-    ├───termsets             				# kontrollierte Vokabulare (müssen manuell erstellt werden)
-    ├───mallet              				 # MALLET-Starter-Pfad (wird auf der Seite MALLET einrichten erstellt)
-    └───topic-models        				 # Topic-Modelle (werden im Lauf der Verarbeitung sklearn/MALLET)
+|       2_2._Verarbeitetes_Korpus_laden.py
+|       3_3._Metadatenschema_fixieren.py
+|       4_4.1_Token-Statistik_erstellen.py
+|       5_4.2.1_Ausdrücke_taggen.py
+|       6_4.2.2_Tags_verarbeiten.py
+|       7_4.2.3_Termset_erstellen.py
+|       8_4.3_Wort-Vektor-Modell_erstellen.py
+|       9_4.4.1_MALLET_einrichten.py
+|
+\---resources
+    +---preprocessing_lists             # Stoppwörter, Ersetzungen, OCR
+            ocr_post-correction_dictionary.txt
+            ocr_post-correction_dictionary_dummy.txt
+            replacements_dummy.json
+            replacements_v5.json
+            stopwords_dummy.txt
+            stopwords_v4.txt
+    +---stop_pos_tag/                   # [Dynamic] Getaggte POS-Listen
+    +---termsets/                       # [Dynamic] Kontrollierte Vokabulare
+    +---mallet/                         # [Dynamic] MALLET-Starter-Pfad
+    \---topic-models/                   # [Dynamic] Topic-Modell-Dateien
 ```
 
 ## 8. Verwendete KI

@@ -18,6 +18,7 @@ content_candidates:
 year:
   first_candidates:
   - date
+  - year
   - year_first
   - Jahr_first
   - jahr_first
@@ -29,9 +30,9 @@ year:
   - Jahr_final
   - date
 display_columns:
-- author_surname
 - title
 - year_final
+- corpus_root
 facets: []
 min_year: null
 delimiter: auto

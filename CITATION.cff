@@ -1,10 +1,10 @@
-cff-version: 0.3
+cff-version: 0.2
 message: "Bitte diese Software wie folgt zitieren:"
 authors:
   - family-names: "Heimböckel"
     given-names: "Hendrick"
 title: "signifier"
-version: "0.3"
+version: "0.2"
 doi: 10.5281/zenodo.20758478
 date-released: "2026-06-30"
 url: 

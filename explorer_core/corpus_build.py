@@ -53,6 +53,11 @@ DEFAULT_TEI_META: Dict[str, str] = {
 DEFAULT_TEI_CONTENT: List[str] = [".//tei:text//tei:body", ".//tei:text"]
 DEFAULT_ID_XPATH = "./@xml:id"
 
+# Elementnamen (lokal), deren Textinhalt bei der Content-Übernahme NICHT
+# mitgenommen wird. TEI-``<head>`` sind Kapitel-/Abschnittsüberschriften im
+# Body; sie sollen nicht in den Fließtext des Korpus wandern.
+CONTENT_EXCLUDE_TAGS = {"head"}
+
 # Wertbehaftete Attribute: TEI legt Datumsangaben u. ä. im Attribut ab, nicht im
 # Elementtext (z. B. <date when="1850"/>). Diese werden als Wert gelesen, wenn
 # ein Element keinen Text hat – sonst bliebe das Metadatum leer.
@@ -126,12 +131,21 @@ def _parse_root(xml_text: str, use_namespace: bool):
     return root, False
 
 
-def _xpath_texts(root, is_lxml: bool, xpath: str, use_namespace: bool) -> List[str]:
+def _xpath_texts(root, is_lxml: bool, xpath: str, use_namespace: bool,
+                 exclude_tags=None) -> List[str]:
     ns = NS if use_namespace else None
+
+    def _text_of(el) -> str:
+        """Elementtext (ganzer Teilbaum), optional ohne ``exclude_tags``."""
+        if exclude_tags:
+            pieces = _itertext_excluding(el, exclude_tags)
+        else:
+            pieces = el.itertext()
+        return normalize_ws((" " if is_lxml else "").join(pieces))
+
     # Wurzel selbst
     if xpath in (".", "", "/"):
-        txt = normalize_ws(" ".join(root.itertext()) if is_lxml
-                           else "".join(root.itertext()))
+        txt = _text_of(root)
         return [txt] if txt else []
     out: List[str] = []
     if is_lxml:
@@ -142,7 +156,7 @@ def _xpath_texts(root, is_lxml: bool, xpath: str, use_namespace: bool) -> List[s
         for r in res:
             if hasattr(r, "itertext"):
                 # Leerer Elementtext → Attributwert (z. B. <date when="1850"/>).
-                out.append(normalize_ws(" ".join(r.itertext())) or _attr_value(r))
+                out.append(_text_of(r) or _attr_value(r))
             else:
                 out.append(normalize_ws(str(r)))
     else:
@@ -151,12 +165,12 @@ def _xpath_texts(root, is_lxml: bool, xpath: str, use_namespace: bool) -> List[s
         except Exception:
             return []
         for el in res:
-            out.append(normalize_ws("".join(el.itertext())) or _attr_value(el))
+            out.append(_text_of(el) or _attr_value(el))
     return [x for x in out if x]
 
 
-def _first_text(root, is_lxml, xpath, use_namespace) -> str:
-    vals = _xpath_texts(root, is_lxml, xpath, use_namespace)
+def _first_text(root, is_lxml, xpath, use_namespace, exclude_tags=None) -> str:
+    vals = _xpath_texts(root, is_lxml, xpath, use_namespace, exclude_tags)
     return vals[0] if vals else ""
 
 
@@ -173,6 +187,26 @@ def _all_texts(root, is_lxml, xpath, use_namespace) -> str:
 
 def _localname(tag) -> str:
     return tag.split("}", 1)[1] if isinstance(tag, str) and "}" in tag else tag
+
+
+def _itertext_excluding(el, exclude):
+    """Wie ``el.itertext()``, überspringt aber komplette Teilbäume, deren
+    lokaler Elementname in ``exclude`` steht (z. B. ``head``).
+
+    Der **Tail** hinter einem ausgeschlossenen Element – also der Fließtext,
+    der direkt auf eine ``<head>``-Überschrift folgt – bleibt erhalten.
+    Kommentare/PIs (nicht-string Tags) werden wie bei ``itertext`` im Text
+    übersprungen, ihr Tail aber übernommen.
+    """
+    if el.text:
+        yield el.text
+    for child in el:
+        tag = child.tag
+        if isinstance(tag, str) and _localname(tag) not in exclude:
+            yield from _itertext_excluding(child, exclude)
+        tail = getattr(child, "tail", None)
+        if tail:
+            yield tail
 
 
 def path_leaf(path: str) -> str:
@@ -296,7 +330,9 @@ def parse_xml_document(xml_text: str, fname: str,
 
     content = ""
     for cx in content_xpaths:
-        content = _first_text(root, is_lxml, cx, use_namespace)
+        # <head>-Überschriften im Body nicht in den Fließtext übernehmen.
+        content = _first_text(root, is_lxml, cx, use_namespace,
+                              exclude_tags=CONTENT_EXCLUDE_TAGS)
         if content:
             break
 
